@@ -14,8 +14,9 @@ import (
 )
 
 type SpinRequest struct {
-	UserID string  `json:"userId" binding:"required"`
-	Bet    float64 `json:"bet" binding:"required,min=1,max=1000"`
+	UserID       string  `json:"userId" binding:"required"`
+	Bet          float64 `json:"bet" binding:"required,min=1,max=1000"`
+	CPUIntensive bool    `json:"cpu_intensive,omitempty"`
 }
 
 // sentryRoundTripper adds Sentry trace headers to outgoing HTTP requests
@@ -91,8 +92,9 @@ func Spin(cfg *config.Config) gin.HandlerFunc {
 		defer gameSpan.Finish()
 
 		gameReq := map[string]interface{}{
-			"userId": req.UserID,
-			"bet":    req.Bet,
+			"userId":        req.UserID,
+			"bet":           req.Bet,
+			"cpu_intensive": req.CPUIntensive,
 		}
 
 		body, _ := json.Marshal(gameReq)

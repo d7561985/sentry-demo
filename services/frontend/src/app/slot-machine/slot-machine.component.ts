@@ -79,6 +79,19 @@ import { GameService } from '../services/game.service';
             </button>
           </div>
           
+          <div class="debug-section">
+            <h4>Performance Issues</h4>
+            <button class="debug-button" (click)="triggerN1Query()">
+              🐌 Trigger N+1 Query
+            </button>
+            <button class="debug-button" (click)="triggerCPUSpike()">
+              🔥 Trigger CPU Spike
+            </button>
+            <button class="debug-button" (click)="triggerSlowAggregation()">
+              📊 Trigger Slow Analytics
+            </button>
+          </div>
+          
           <div class="debug-status" *ngIf="debugStatus">
             Status: {{ debugStatus }}
           </div>
@@ -426,6 +439,102 @@ export class SlotMachineComponent implements OnInit {
       }
     } catch (error) {
       this.debugStatus = 'Error calling user service';
+    }
+  }
+  
+  // Performance Issue Triggers
+  
+  async triggerN1Query(): Promise<void> {
+    this.debugStatus = 'Triggering N+1 query problem...';
+    
+    const transaction = Sentry.startTransaction({
+      name: 'debug-n1-query',
+      op: 'http'
+    });
+    
+    try {
+      const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer valid-token'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        this.debugStatus = `N+1 query executed! Found ${data.totalGames} games. Check Performance in Sentry.`;
+      } else {
+        this.debugStatus = `Failed to trigger N+1: ${response.status}`;
+      }
+    } catch (error) {
+      this.debugStatus = 'Error triggering N+1 query';
+      Sentry.captureException(error);
+    } finally {
+      transaction.finish();
+    }
+  }
+  
+  async triggerCPUSpike(): Promise<void> {
+    this.debugStatus = 'Triggering CPU spike in game engine...';
+    
+    const transaction = Sentry.startTransaction({
+      name: 'debug-cpu-spike',
+      op: 'http'
+    });
+    
+    try {
+      // Make a spin request with cpu_intensive flag
+      const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer valid-token'
+        },
+        body: JSON.stringify({
+          userId: this.userId,
+          bet: 10,
+          cpu_intensive: true  // This triggers the CPU spike
+        })
+      });
+      
+      if (response.ok) {
+        this.debugStatus = 'CPU spike completed! Check Performance → Game Engine in Sentry.';
+      } else {
+        this.debugStatus = `Failed to trigger CPU spike: ${response.status}`;
+      }
+    } catch (error) {
+      this.debugStatus = 'Error triggering CPU spike';
+      Sentry.captureException(error);
+    } finally {
+      transaction.finish();
+    }
+  }
+  
+  async triggerSlowAggregation(): Promise<void> {
+    this.debugStatus = 'Triggering slow MongoDB aggregation...';
+    
+    const transaction = Sentry.startTransaction({
+      name: 'debug-slow-aggregation',
+      op: 'http'
+    });
+    
+    try {
+      // Call analytics service for daily stats
+      const response = await fetch(`http://localhost:8084/api/v1/analytics/daily-stats?days=30`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        this.debugStatus = `Slow aggregation completed! Processed ${data.days_returned} days. Check Performance → Analytics in Sentry.`;
+      } else {
+        this.debugStatus = `Failed to trigger aggregation: ${response.status}`;
+      }
+    } catch (error) {
+      this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
+      Sentry.captureException(error);
+    } finally {
+      transaction.finish();
     }
   }
 }

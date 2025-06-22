@@ -12,12 +12,13 @@
 
 2. **Создайте проекты в Sentry**:
    - В Sentry Dashboard нажмите "Create Project"
-   - Создайте 5 проектов (по одному для каждого сервиса):
+   - Создайте 6 проектов (по одному для каждого сервиса):
      - `igaming-frontend` (Platform: Browser/JavaScript)
      - `igaming-gateway` (Platform: Go)
      - `igaming-user` (Platform: Go)
      - `igaming-game` (Platform: Python)
      - `igaming-payment` (Platform: Node.js)
+     - `igaming-analytics` (Platform: Python)
 
 3. **Получите DSN для каждого проекта**:
    - Откройте каждый проект
@@ -36,6 +37,7 @@
    SENTRY_USER_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234569
    SENTRY_GAME_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234570
    SENTRY_PAYMENT_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234571
+   SENTRY_ANALYTICS_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234572
    ```
 
 ### 2. Запуск сервисов
@@ -195,6 +197,24 @@ curl http://localhost:8080/api/v1/debug/panic/panic-test
 3. Вызовите любую ошибку через Debug Panel
 4. В Sentry откройте эту ошибку → вкладка Replay
 5. Покажите видео сессии пользователя
+
+## 🚀 Scenario 3: Performance Monitoring
+
+Демонстрация возможностей Sentry по выявлению проблем производительности.
+
+### Реализованные проблемы:
+- **N+1 Query Problem** в User Service
+- **CPU Spike** с генерацией простых чисел в Game Engine  
+- **Slow MongoDB Aggregation** в Analytics Service
+- **External API Latency** в Payment Service
+
+### Быстрый старт:
+1. Откройте Debug Panel в интерфейсе
+2. Найдите секцию "Performance Issues"
+3. Нажимайте кнопки для воспроизведения проблем
+4. Смотрите результаты в Sentry Performance
+
+**Подробная инструкция**: [docs/scenario-3-performance-demo.md](docs/scenario-3-performance-demo.md)
 
 ## 🛠 Troubleshooting
 

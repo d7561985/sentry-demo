@@ -43,8 +43,14 @@
    - Slow external API (2-5s)
    - Transaction recording
 
-### 🔴 Not Started (3/8) - Not needed for Scenario 1
-6. **Analytics Service (Python)** - 0%
+### 🟢 Completed (6/8) - Scenarios 1, 2, 3 Ready
+6. **Analytics Service (Python)** - 100% ✅
+   - FastAPI setup
+   - Slow MongoDB aggregation demo
+   - Multiple inefficient queries
+   - Sentry integration
+
+### 🔴 Not Started (2/8) - Not needed for current scenarios
 7. **Notification Service (Go)** - 0%
 8. **Admin Panel (React)** - 0%
 
@@ -74,7 +80,11 @@
   - Backend: Gateway panic, Auth 401 errors
   - Debug panel for easy testing
   - Archive: `/docs/archive/2025-06-22_scenario2_error_tracking.md`
-- [ ] Memory leak demonstration (Scenario 3 - Admin Panel)
+- [x] Performance Monitoring (Scenario 3) ✅ ARCHIVED
+  - N+1 queries, CPU spike, slow aggregation
+  - Debug panel integration
+  - Archive: `/docs/archive/2025-06-22_scenario3_performance_monitoring.md`
+- [ ] Memory leak demonstration (Future - Admin Panel)
 - [x] Slow query detection ✅ (User Service - Part of Scenario 1)
 - [x] Error tracking flow ✅ (Payment Service - Part of Scenario 1)
 - [x] Performance bottleneck ✅ (Game Engine CPU spike - Part of Scenario 1)
@@ -85,7 +95,7 @@
 ## Milestones
 1. **Milestone 1**: Basic service scaffolding - 100% ✅
 2. **Milestone 2**: Sentry SDK integration - 100% ✅
-3. **Milestone 3**: Demo scenarios working - 33% (Scenarios 1 & 2 complete)
-4. **Milestone 4**: Full POC ready - 33%
+3. **Milestone 3**: Demo scenarios working - 50% (Scenarios 1, 2 & 3 complete)
+4. **Milestone 4**: Full POC ready - 50%
 
 ## Last Updated: 2025-06-22

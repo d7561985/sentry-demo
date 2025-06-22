@@ -59,6 +59,7 @@ func main() {
 
 	// Apply auth middleware to protected routes
 	router.GET("/balance/:userId", middleware.AuthMiddleware(), userHandler.GetBalance)
+	router.GET("/history/:userId", middleware.AuthMiddleware(), userHandler.GetHistory)
 
 	// Start server
 	srv := &http.Server{

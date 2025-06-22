@@ -100,6 +100,20 @@ services:
     depends_on:
       - mongodb
 
+  # Analytics Service
+  analytics-service:
+    build: ./services/analytics-service
+    container_name: sentry-poc-analytics
+    ports:
+      - "8084:8084"
+    environment:
+      - SENTRY_DSN=${SENTRY_ANALYTICS_DSN}
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - mongodb
+
 networks:
   sentry-poc-network:
     driver: bridge

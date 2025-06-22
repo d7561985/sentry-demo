@@ -110,3 +110,116 @@ func (h *UserHandler) GetBalance(c *gin.Context) {
 		"balance": user.Balance,
 	})
 }
+
+// GetHistory demonstrates N+1 query problem for performance monitoring
+func (h *UserHandler) GetHistory(c *gin.Context) {
+	// Get current span from Sentry
+	span := sentry.TransactionFromContext(c.Request.Context())
+	if span == nil {
+		span = sentry.StartTransaction(c.Request.Context(), "user.get_history")
+		defer span.Finish()
+	}
+
+	userID := c.Param("userId")
+	ctx := context.Background()
+	
+	// Seed some demo data if needed
+	if err := SeedGameHistory(h.mongoClient, userID); err != nil {
+		// Log but don't fail - seeding is optional
+		sentry.CaptureException(err)
+	}
+	
+	// First, get the user
+	userSpan := span.StartChild("db.query.user")
+	userSpan.Description = "Find user by ID"
+	userSpan.SetData("db.system", "mongodb")
+	userSpan.SetData("db.collection", "users")
+	
+	collection := h.mongoClient.Database("sentry_poc").Collection("users")
+	var user models.User
+	err := collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
+	userSpan.Finish()
+	
+	if err != nil {
+		sentry.CaptureException(err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	
+	// INTENTIONAL N+1 QUERY PROBLEM
+	// Bad practice: Get all game IDs first, then fetch each game individually
+	historySpan := span.StartChild("db.query.history")
+	historySpan.Description = "Get user game history (N+1 problem)"
+	historySpan.SetData("antipattern", "n+1_query")
+	
+	// First query: Get game IDs for this user
+	gameIDsSpan := historySpan.StartChild("db.query.game_ids")
+	gameIDsSpan.Description = "Find game IDs for user"
+	
+	historyCollection := h.mongoClient.Database("sentry_poc").Collection("game_history")
+	cursor, err := historyCollection.Find(ctx, bson.M{"user_id": userID}, options.Find().SetProjection(bson.M{"_id": 1}).SetLimit(20))
+	if err != nil {
+		gameIDsSpan.Status = sentry.SpanStatusInternalError
+		gameIDsSpan.Finish()
+		historySpan.Finish()
+		sentry.CaptureException(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch history"})
+		return
+	}
+	
+	var gameIDs []string
+	for cursor.Next(ctx) {
+		var result bson.M
+		if err := cursor.Decode(&result); err == nil {
+			if id, ok := result["_id"].(string); ok {
+				gameIDs = append(gameIDs, id)
+			}
+		}
+	}
+	cursor.Close(ctx)
+	gameIDsSpan.Finish()
+	
+	// N+1 PROBLEM: Fetch each game individually
+	var games []models.GameHistory
+	for i, gameID := range gameIDs {
+		// Each iteration is a separate database query
+		gameSpan := historySpan.StartChild("db.query.single_game")
+		gameSpan.Description = "Fetch individual game"
+		gameSpan.SetData("game_index", i)
+		gameSpan.SetData("game_id", gameID)
+		
+		// Simulate slow query
+		time.Sleep(50 * time.Millisecond)
+		
+		var game models.GameHistory
+		err := historyCollection.FindOne(ctx, bson.M{"_id": gameID}).Decode(&game)
+		if err == nil {
+			games = append(games, game)
+		}
+		
+		gameSpan.Finish()
+	}
+	
+	historySpan.SetData("total_queries", len(gameIDs)+1)
+	historySpan.SetData("games_fetched", len(games))
+	historySpan.Finish()
+	
+	// Calculate stats
+	statsSpan := span.StartChild("calculate.stats")
+	totalBet := 0.0
+	totalPayout := 0.0
+	for _, game := range games {
+		totalBet += game.BetAmount
+		totalPayout += game.Payout
+	}
+	statsSpan.Finish()
+	
+	c.JSON(http.StatusOK, gin.H{
+		"userId":       user.ID,
+		"totalGames":   len(games),
+		"totalBet":     totalBet,
+		"totalPayout":  totalPayout,
+		"games":        games,
+		"queryPattern": "N+1 (bad for performance)",
+	})
+}

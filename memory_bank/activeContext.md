@@ -6,6 +6,9 @@
 - Scenario 1: Distributed Tracing ✅ ARCHIVED
 - Frontend Enhancement: Animated slot machine ✅
 - Scenario 2: Error Tracking Suite ✅ ARCHIVED
+- Source Maps Configuration ✅
+- Session Replay Feature ✅
+- Scenario 3: Performance Monitoring ✅ ARCHIVED
 
 ## Active Focus
 Awaiting next task selection
@@ -63,7 +66,7 @@ Scenario → Required Services → Minimal Code → Test → Demo
 ```
 
 ## Available Next Scenarios
-1. **Scenario 3: Performance Monitoring**
+1. **Scenario 3: Performance Monitoring** 🔍 CURRENT
    - N+1 queries, slow operations
    - Memory profiling
    - CPU usage tracking
@@ -80,6 +83,57 @@ Scenario → Required Services → Minimal Code → Test → Demo
 4. **Scenario 6: Alert Optimization**
    - Reduce noise
    - Focus on critical issues
+
+## Scenario 3 Requirements Analysis
+### Performance Issues to Demonstrate:
+1. **User Service - N+1 Query Problem**
+   - Fetch user, then fetch each game history separately
+   - Show in Sentry performance view
+   - Endpoint: `/api/v1/user/:userId/history`
+   
+2. **Game Engine - CPU Spike**
+   - Inefficient RNG calculation (prime number generation)
+   - Show CPU profiling in Sentry
+   - Add query param: `?cpu_intensive=true`
+   
+3. **Analytics Service - Slow Aggregation**
+   - Create new Python service
+   - Unoptimized MongoDB aggregation pipeline
+   - Missing indexes on game_sessions collection
+   - Endpoint: `/api/v1/analytics/daily-stats`
+   
+4. **Payment Service - External API Latency**
+   - Already implemented (2-5s delay) ✅
+   - Need to highlight in performance dashboard
+
+### Detailed Implementation Plan
+1. **User Service Enhancement**
+   - Add game history model
+   - Create `/history` endpoint with intentional N+1
+   - Each game fetch = separate DB query
+   
+2. **Game Engine CPU Spike**
+   - Add inefficient prime calculation for RNG seed
+   - Toggle via query parameter
+   - Should spike CPU for ~1-2 seconds
+   
+3. **Analytics Service Creation**
+   - Python/FastAPI service
+   - MongoDB aggregation for daily stats
+   - Intentionally missing compound index
+   - Full collection scan on large dataset
+   
+4. **Frontend Debug Panel Update**
+   - Add "Performance Tests" section
+   - Buttons for each scenario
+   - Show performance metrics inline
+
+### Safety Requirements
+**CRITICAL**: Performance features MUST NOT break existing functionality
+- All performance issues behind feature flags/params
+- Default behavior remains fast
+- Only trigger performance issues on demand
+- Maintain distributed tracing integrity
 
 ## Recommended Next Step
 Return to VAN mode to plan next scenario or proceed with git commit if requested.

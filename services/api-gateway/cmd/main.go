@@ -53,6 +53,7 @@ func main() {
 	{
 		// User endpoints
 		api.GET("/users/:userId/balance", middleware.Auth(), handlers.GetUserBalance(cfg))
+		api.GET("/user/:userId/history", middleware.Auth(), handlers.GetUserHistory(cfg))
 		
 		// Spin endpoint - main game action
 		api.POST("/spin", middleware.Auth(), handlers.Spin(cfg))

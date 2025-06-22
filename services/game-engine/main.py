@@ -43,13 +43,20 @@ class CalculateHandler(web.RequestHandler):
                 data = json.loads(self.request.body)
                 user_id = data.get('userId')
                 bet = data.get('bet')
+                cpu_intensive = data.get('cpu_intensive', False)
                 
                 # Start span for RNG calculation
                 with start_span(op="game.rng", description="Calculate slot result") as span:
-                    # INTENTIONAL CPU SPIKE for demo
-                    # Simulate inefficient RNG calculation
-                    result = self._calculate_slot_result_inefficient()
-                    span.set_data("calculation_method", "inefficient")
+                    if cpu_intensive:
+                        # INTENTIONAL CPU SPIKE for demo
+                        # Simulate inefficient RNG calculation with prime numbers
+                        result = self._calculate_slot_result_cpu_intensive()
+                        span.set_data("calculation_method", "cpu_intensive_primes")
+                        span.set_tag("performance.issue", "cpu_spike")
+                    else:
+                        # Normal efficient calculation
+                        result = self._calculate_slot_result_normal()
+                        span.set_data("calculation_method", "normal")
                 
                 # Calculate payout
                 win = result['win']
@@ -88,6 +95,92 @@ class CalculateHandler(web.RequestHandler):
                 sentry_sdk.capture_exception(e)
                 self.set_status(500)
                 self.write({"error": str(e)})
+    
+    def _calculate_slot_result_normal(self):
+        """Normal efficient slot calculation"""
+        symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎']
+        result_symbols = [random.choice(symbols) for _ in range(3)]
+        
+        # Check if win (all symbols match)
+        win = all(s == result_symbols[0] for s in result_symbols)
+        
+        # Calculate multiplier based on symbol
+        multipliers = {
+            '🍒': 2,
+            '🍋': 3,
+            '🍊': 4,
+            '🍇': 5,
+            '⭐': 10,
+            '💎': 20
+        }
+        
+        multiplier = multipliers.get(result_symbols[0], 1) if win else 0
+        
+        return {
+            'symbols': result_symbols,
+            'win': win,
+            'multiplier': multiplier
+        }
+    
+    def _is_prime(self, n):
+        """Inefficient prime check for CPU spike demo"""
+        if n < 2:
+            return False
+        for i in range(2, int(n**0.5) + 1):
+            if n % i == 0:
+                return False
+        return True
+    
+    def _calculate_slot_result_cpu_intensive(self):
+        """CPU-intensive calculation using prime number generation"""
+        with start_span(op="cpu.prime_generation", description="Generate large primes") as span:
+            # Generate large prime numbers (VERY inefficient on purpose)
+            primes = []
+            num = 1000000  # Start with a large number
+            while len(primes) < 3:
+                if self._is_prime(num):
+                    primes.append(num)
+                num += 1
+            span.set_data("primes_generated", primes)
+        
+        with start_span(op="cpu.heavy_calculation", description="Heavy math operations") as span:
+            # Use primes for complex calculations
+            symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎']
+            result_symbols = []
+            
+            for prime in primes:
+                # More CPU-intensive operations
+                heavy_calc = 0
+                for i in range(10000):
+                    heavy_calc += np.sin(prime * i) * np.cos(prime / (i + 1))
+                    heavy_calc += np.log(abs(heavy_calc) + 1)
+                
+                # Select symbol based on calculation
+                symbol_index = int(abs(heavy_calc) % len(symbols))
+                result_symbols.append(symbols[symbol_index])
+            
+            span.set_data("calculation_iterations", len(primes) * 10000)
+        
+        # Check if win (all symbols match)
+        win = all(s == result_symbols[0] for s in result_symbols)
+        
+        # Calculate multiplier based on symbol
+        multipliers = {
+            '🍒': 2,
+            '🍋': 3,
+            '🍊': 4,
+            '🍇': 5,
+            '⭐': 10,
+            '💎': 20
+        }
+        
+        multiplier = multipliers.get(result_symbols[0], 1) if win else 0
+        
+        return {
+            'symbols': result_symbols,
+            'win': win,
+            'multiplier': multiplier
+        }
     
     def _calculate_slot_result_inefficient(self):
         """Intentionally inefficient calculation for CPU spike demo"""
