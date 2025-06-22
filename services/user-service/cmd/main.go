@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sentry-poc/user-service/internal/db"
 	"github.com/sentry-poc/user-service/internal/handlers"
+	"github.com/sentry-poc/user-service/internal/middleware"
 )
 
 func main() {
@@ -56,7 +57,8 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	router.GET("/balance/:userId", userHandler.GetBalance)
+	// Apply auth middleware to protected routes
+	router.GET("/balance/:userId", middleware.AuthMiddleware(), userHandler.GetBalance)
 
 	// Start server
 	srv := &http.Server{

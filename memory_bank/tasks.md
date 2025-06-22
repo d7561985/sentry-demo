@@ -1,16 +1,24 @@
 # Tasks - Single Source of Truth
 
-## Active Mode: VAN - Frontend Enhancement
+## Active Mode: VAN - Scenario 2 Planning
 
 ## Current Tasks
 
-### High Priority
+### Scenario 2: ✅ ARCHIVED
+Archive: `/docs/archive/2025-06-22_scenario2_error_tracking.md`
+- [x] Plan Scenario 2: Error Tracking Suite implementation
+- [x] Add unhandled promise rejection in frontend
+- [x] Implement Angular ErrorHandler for component errors
+- [x] Add invalid token scenario to User Service (401 errors)
+- [x] Create error trigger buttons in frontend UI
+- [x] Test all error scenarios with Sentry dashboard
+- [x] Create demo script documentation for error scenarios
+
+### Previously Completed
 - [x] Check and create Memory Bank structure
 - [x] Create isolation rules for VAN mode
 - [x] Initialize projectbrief.md from PRD
 - [x] Add animated slot machine UI to frontend
-
-### Medium Priority
 - [x] Create initial activeContext.md
 - [x] Initialize progress.md tracking
 
@@ -33,6 +41,10 @@
 - 2025-06-21: REFLECT mode - Analysis completed
 - 2025-06-21: ARCHIVE mode - Scenario 1 archived to docs/archive/
 - 2025-06-22: VAN mode - Added animated slot machine UI
+- 2025-06-22: VAN mode - Planning Scenario 2: Error Tracking Suite
+- 2025-06-22: IMPLEMENT mode - Scenario 2 completed successfully
+- 2025-06-22: REFLECT mode - Scenario 2 reflection completed
+- 2025-06-22: ARCHIVE mode - Scenario 2 archived successfully
 
 ## Scenario 1: COMPLETED ✅
 Archive: `/docs/archive/2025-06-21_scenario1_distributed_tracing.md`
@@ -62,5 +74,44 @@ Project complexity assessment: SIMPLIFIED
 - Focus on Sentry demo value
 - Clear implementation path
 
-**Recommendation: Test frontend changes, then proceed to next scenario**
-Start with Scenario 2: Error Tracking Suite
+**Current Status: Ready for Next Scenario**
+
+## Completed Scenarios
+1. **Scenario 1: Distributed Tracing** ✅ ARCHIVED
+   - Archive: `/docs/archive/2025-06-21_scenario1_distributed_tracing.md`
+   
+2. **Scenario 2: Error Tracking Suite** ✅ ARCHIVED
+   - Archive: `/docs/archive/2025-06-22_scenario2_error_tracking.md`
+
+## Scenario 2 Implementation Plan
+
+### Frontend Errors (2 types)
+1. **Unhandled Promise Rejection**
+   - Add async API call that can fail
+   - Show how Sentry captures unhandled rejections
+   - Include user context in error
+
+2. **Angular Error Boundary**
+   - Implement custom ErrorHandler
+   - Catch component lifecycle errors
+   - Show stack trace and component context
+
+### Backend Errors (Already Available)
+1. **Gateway Panic** ✅
+   - Endpoint: `/api/v1/debug/panic/:userId`
+   - Triggers Go panic for demo
+
+2. **Payment Service 500** ✅  
+   - 10% random failure rate
+   - Shows distributed error context
+
+### Additional Backend Error
+1. **User Service 401**
+   - Add token validation
+   - Return 401 for invalid/expired tokens
+   - Show auth error handling
+
+### UI Implementation
+- Add "Debug Panel" with error trigger buttons
+- Each button triggers specific error scenario
+- Show real-time error capture in Sentry

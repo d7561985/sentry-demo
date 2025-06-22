@@ -1,12 +1,45 @@
 # Active Context - Current Focus
 
-## Current Mode: Ready for VAN
+## Current Mode: ARCHIVE - Ready for Next Task
 
 ## Previous Work Completed
-Scenario 1: Distributed Tracing ✅ ARCHIVED
+- Scenario 1: Distributed Tracing ✅ ARCHIVED
+- Frontend Enhancement: Animated slot machine ✅
+- Scenario 2: Error Tracking Suite ✅ ARCHIVED
 
 ## Active Focus
-Ready to begin next scenario. Suggested: Scenario 2 - Error Tracking Suite
+Awaiting next task selection
+
+## Scenario 2 Requirements Analysis
+### Frontend JS Errors Needed:
+1. **Unhandled Promise Rejection**
+   - Add async operation that can fail
+   - Show in browser console and Sentry
+   
+2. **Angular Error Boundary**
+   - Implement ErrorHandler
+   - Catch component errors
+
+### Backend Errors Already Available:
+1. **Gateway Panic** ✅
+   - Endpoint: `/api/v1/debug/panic/:userId`
+   - Already implemented
+   
+2. **Payment Service 500** ✅
+   - 10% random failure rate
+   - Already implemented
+
+### Additional Errors to Add:
+1. **User Service 401**
+   - Invalid token handling
+   - Need to add auth validation
+
+## Implementation Plan for Scenario 2
+1. Add unhandled promise rejection in frontend
+2. Implement Angular ErrorHandler
+3. Add invalid token scenario
+4. Create demo script to trigger all errors
+5. Document error contexts and grouping
 
 ## Key Decisions Made (Revised)
 1. **Подход**: Сценарно-ориентированная разработка
@@ -17,8 +50,8 @@ Ready to begin next scenario. Suggested: Scenario 2 - Error Tracking Suite
 
 ## Scenario-Driven Development
 Вместо разработки по сервисам, работаем по сценариям:
-1. **Distributed Tracing** - основа всего
-2. **Error Tracking** - разные типы ошибок
+1. **Distributed Tracing** ✅ - основа всего
+2. **Error Tracking** 🔄 - разные типы ошибок (CURRENT)
 3. **Performance** - N+1, slow queries, memory leaks
 4. **Custom Metrics** - RTP, sessions, success rate
 5. **Release Tracking** - regression demo
@@ -29,30 +62,65 @@ Ready to begin next scenario. Suggested: Scenario 2 - Error Tracking Suite
 Scenario → Required Services → Minimal Code → Test → Demo
 ```
 
-## Next Steps
-1. Начать с Scenario 1 (Distributed Tracing)
-2. Создать минимальные сервисы для trace flow
-3. Добавлять issues по мере реализации сценариев
-4. Тестировать каждый сценарий отдельно
+## Available Next Scenarios
+1. **Scenario 3: Performance Monitoring**
+   - N+1 queries, slow operations
+   - Memory profiling
+   - CPU usage tracking
+   
+2. **Scenario 4: Custom Business Metrics**
+   - RTP tracking
+   - Active sessions
+   - Success rates
+   
+3. **Scenario 5: Release Tracking**
+   - Version comparison
+   - Regression detection
+   
+4. **Scenario 6: Alert Optimization**
+   - Reduce noise
+   - Focus on critical issues
 
-## Context for Next Session
-- Scenario 1: COMPLETED and ARCHIVED
-- Infrastructure ready for next scenarios
-- 5 services with Sentry integration operational
+## Recommended Next Step
+Return to VAN mode to plan next scenario or proceed with git commit if requested.
 
-## Available for Scenario 2:
-### Already Implemented:
-- API Gateway panic endpoint (`/api/v1/debug/panic/panic-test`)
-- Payment Service 500 errors (10% rate)
-- All service infrastructure and Docker setup
+## Safety Requirements
+**CRITICAL**: Scenario 2 implementation MUST NOT break Scenario 1 (Distributed Tracing)
+- All new error features must be additive only
+- No modifications to existing spin functionality
+- Error triggers must be separate from main game flow
+- Test distributed tracing after each change
 
-### Need to Add for Scenario 2:
-- Frontend JS errors (unhandled promises)
-- React error boundaries
-- Additional error types demonstration
+## Detailed Implementation Tasks
 
-## Next Recommended Steps:
-1. Start VAN mode for Scenario 2
-2. Review Error Tracking requirements from sentryDemoScenarios.md
-3. Plan minimal additions needed
-4. Implement new error scenarios
+### Frontend Tasks
+1. **Add Promise Rejection Error**
+   - Create new method in game.service.ts that fails randomly
+   - Don't catch the error to demonstrate unhandled rejection
+   - Sentry will auto-capture with full context
+
+2. **Implement Angular ErrorHandler**
+   - Create custom error handler class
+   - Register in app.module.ts providers
+   - Add method that throws error in component
+
+3. **Debug Panel UI**
+   - Add collapsible debug panel to slot machine
+   - Buttons: "Trigger Promise Error", "Trigger Component Error", "Trigger Gateway Panic", "Trigger Auth Error"
+   - Show current error state
+
+### Backend Tasks  
+1. **User Service 401 Implementation**
+   - Add middleware to check Authorization header
+   - Return 401 if token is "invalid-token"
+   - Include proper error context for Sentry
+
+### Testing Flow
+1. Start all services
+2. Open frontend
+3. Use debug panel to trigger each error
+4. Verify in Sentry dashboard:
+   - Error grouping by type
+   - Stack traces
+   - User context
+   - Distributed trace context

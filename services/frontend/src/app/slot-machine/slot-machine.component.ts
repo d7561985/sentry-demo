@@ -49,6 +49,41 @@ import { GameService } from '../services/game.service';
       <div style="margin-top: 40px; opacity: 0.7;">
         <small>User ID: {{ userId }}</small>
       </div>
+      
+      <!-- Debug Panel for Error Scenarios -->
+      <div class="debug-panel">
+        <button class="debug-toggle" (click)="debugPanelOpen = !debugPanelOpen">
+          🐛 {{ debugPanelOpen ? 'Hide' : 'Show' }} Debug Panel
+        </button>
+        
+        <div class="debug-content" *ngIf="debugPanelOpen">
+          <h3>Error Scenario Triggers</h3>
+          
+          <div class="debug-section">
+            <h4>Frontend Errors</h4>
+            <button class="debug-button" (click)="triggerPromiseRejection()">
+              💥 Trigger Promise Rejection
+            </button>
+            <button class="debug-button" (click)="triggerComponentError()">
+              🔥 Trigger Component Error
+            </button>
+          </div>
+          
+          <div class="debug-section">
+            <h4>Backend Errors</h4>
+            <button class="debug-button" (click)="triggerGatewayPanic()">
+              ⚠️ Trigger Gateway Panic
+            </button>
+            <button class="debug-button" (click)="triggerAuthError()">
+              🔒 Trigger 401 Auth Error
+            </button>
+          </div>
+          
+          <div class="debug-status" *ngIf="debugStatus">
+            Status: {{ debugStatus }}
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -182,6 +217,81 @@ import { GameService } from '../services/game.service';
       color: #F44336;
       margin-top: 10px;
     }
+
+    /* Debug Panel Styles */
+    .debug-panel {
+      margin-top: 40px;
+      padding: 20px;
+      background: #1a1a1a;
+      border-radius: 10px;
+      border: 2px solid #333;
+    }
+
+    .debug-toggle {
+      background: #666;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    .debug-toggle:hover {
+      background: #777;
+    }
+
+    .debug-content {
+      margin-top: 20px;
+      text-align: left;
+    }
+
+    .debug-content h3 {
+      color: #ff9800;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    .debug-section {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #252525;
+      border-radius: 8px;
+    }
+
+    .debug-section h4 {
+      color: #4CAF50;
+      margin-bottom: 10px;
+    }
+
+    .debug-button {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 10px;
+      background: #3f51b5;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    .debug-button:hover {
+      background: #303f9f;
+      transform: translateY(-1px);
+    }
+
+    .debug-status {
+      margin-top: 15px;
+      padding: 10px;
+      background: #2196F3;
+      color: white;
+      border-radius: 5px;
+      text-align: center;
+    }
   `]
 })
 export class SlotMachineComponent implements OnInit {
@@ -192,8 +302,16 @@ export class SlotMachineComponent implements OnInit {
   userId = 'demo-user-' + Math.floor(Math.random() * 1000);
   reels: string[] = ['🍒', '🍋', '🍊'];
   spinningSymbols: string[] = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎'];
+  
+  // Debug panel properties
+  debugPanelOpen = false;
+  debugStatus: string | null = null;
 
   constructor(private gameService: GameService) {}
+  
+  get apiUrl(): string {
+    return (this.gameService as any).apiUrl;
+  }
 
   ngOnInit(): void {
     // Set user context for Sentry
@@ -244,6 +362,70 @@ export class SlotMachineComponent implements OnInit {
       Sentry.captureException(error);
     } finally {
       transaction.finish();
+    }
+  }
+  
+  // Debug Panel Methods for Error Scenarios
+  
+  async triggerPromiseRejection(): Promise<void> {
+    this.debugStatus = 'Triggering unhandled promise rejection...';
+    
+    // Create a promise that will reject after 1 second
+    // NOT catching this error intentionally to demonstrate unhandled rejection
+    setTimeout(() => {
+      // This promise rejection will be unhandled
+      Promise.reject(new Error('Unhandled promise rejection from debug panel'));
+      this.debugStatus = 'Promise rejection triggered! Check Sentry dashboard.';
+    }, 1000);
+  }
+  
+  triggerComponentError(): void {
+    this.debugStatus = 'Triggering component error...';
+    
+    // Intentionally throw an error to be caught by Angular ErrorHandler
+    setTimeout(() => {
+      throw new Error('Component error triggered from debug panel');
+    }, 100);
+  }
+  
+  async triggerGatewayPanic(): Promise<void> {
+    this.debugStatus = 'Triggering gateway panic...';
+    
+    try {
+      // Use special userId that triggers panic in gateway
+      const response = await fetch(`${this.apiUrl}/api/v1/debug/panic/panic-test`, {
+        method: 'GET'
+        // Sentry will automatically add trace headers via BrowserTracing
+      });
+      
+      if (!response.ok) {
+        this.debugStatus = 'Gateway panic triggered! Check Sentry for Go panic.';
+      }
+    } catch (error) {
+      this.debugStatus = 'Gateway panic triggered (connection lost)';
+    }
+  }
+  
+  async triggerAuthError(): Promise<void> {
+    this.debugStatus = 'Triggering 401 auth error...';
+    
+    try {
+      // Call user service with invalid token
+      const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer invalid-token'
+          // Sentry will automatically add trace headers via BrowserTracing
+        }
+      });
+      
+      if (response.status === 401) {
+        this.debugStatus = '401 Auth error triggered! Check Sentry dashboard.';
+      } else {
+        this.debugStatus = `Unexpected response: ${response.status}`;
+      }
+    } catch (error) {
+      this.debugStatus = 'Error calling user service';
     }
   }
 }

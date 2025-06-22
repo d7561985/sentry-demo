@@ -7,6 +7,7 @@ import * as Sentry from '@sentry/angular';
 import { AppComponent } from './app.component';
 import { SlotMachineComponent } from './slot-machine/slot-machine.component';
 import { GameService } from './services/game.service';
+import { SentryErrorHandler } from './services/sentry-error.handler';
 
 @NgModule({
   declarations: [
@@ -22,9 +23,7 @@ import { GameService } from './services/game.service';
     GameService,
     {
       provide: ErrorHandler,
-      useValue: Sentry.createErrorHandler({
-        showDialog: false,
-      }),
+      useClass: SentryErrorHandler
     },
   ],
   bootstrap: [AppComponent]
