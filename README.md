@@ -216,6 +216,28 @@ curl http://localhost:8080/api/v1/debug/panic/panic-test
 
 **Подробная инструкция**: [docs/scenario-3-performance-demo.md](docs/scenario-3-performance-demo.md)
 
+## 📨 RabbitMQ Analytics Integration
+
+Демонстрация distributed tracing через асинхронные очереди сообщений.
+
+### Архитектура
+- **Publishers**: Game Engine и Payment Service публикуют события
+- **Message Queue**: RabbitMQ с exchange "gaming"
+- **Consumer**: Analytics Service обрабатывает сообщения в реальном времени
+- **Трассировка**: Полный trace от HTTP запроса через MQ до обработки
+
+### Ключевые возможности:
+- ✅ Trace propagation через RabbitMQ
+- ✅ Real-time analytics с предагрегацией
+- ✅ Resilience: система работает даже если аналитика недоступна
+- ✅ Автоматическое восстановление при сбоях
+
+### Доступ к RabbitMQ Management:
+- URL: http://localhost:15672
+- Login: admin / password
+
+**Подробная инструкция**: [docs/rabbitmq-analytics-demo.md](docs/rabbitmq-analytics-demo.md)
+
 ## 🛠 Troubleshooting
 
 **Сервисы не запускаются**:
@@ -225,7 +247,7 @@ docker-compose logs -f [service-name]
 
 **Нет данных в Sentry**:
 - Проверьте DSN в `.env`
-- Убедитесь что все 5 проектов созданы
+- Убедитесь что все 6 проектов созданы
 - Проверьте `tracesSampleRate: 1.0` в коде
 
 **Неполные traces**:

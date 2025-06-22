@@ -1,7 +1,9 @@
 import os
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +11,9 @@ from pymongo import MongoClient
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
+from rabbitmq_consumer import AnalyticsConsumer
+
+logging.basicConfig(level=logging.INFO)
 
 # Initialize Sentry
 sentry_sdk.init(
@@ -27,8 +32,31 @@ mongo_url = os.environ.get('MONGODB_URL', 'mongodb://admin:password@localhost:27
 mongo_client = MongoClient(mongo_url)
 db = mongo_client.sentry_poc
 
+# RabbitMQ consumer instance
+consumer = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    global consumer
+    print("Starting Analytics Service lifespan...")
+    try:
+        consumer = AnalyticsConsumer(db)
+        consumer.start()
+        print("Analytics consumer started successfully")
+        logging.info("Analytics consumer started")
+    except Exception as e:
+        print(f"Error starting consumer: {e}")
+        logging.error(f"Failed to start consumer: {e}")
+    yield
+    # Shutdown
+    if consumer:
+        consumer.stop()
+    mongo_client.close()
+    logging.info("Analytics service shutdown complete")
+
 # FastAPI app
-app = FastAPI(title="Analytics Service", version="1.0.0")
+app = FastAPI(title="Analytics Service", version="1.0.0", lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
@@ -41,7 +69,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "analytics"}
+    return {"status": "ok", "service": "analytics", "consumer": "running" if consumer else "stopped"}
 
 @app.get("/api/v1/analytics/daily-stats")
 async def get_daily_stats(days: int = 7):
@@ -228,6 +256,55 @@ async def get_player_metrics(user_id: str):
                 "net_profit": total_payouts - total_bets,
                 "favorite_symbols": symbol_stats,
                 "performance_note": "This endpoint makes 5 separate queries instead of using aggregation"
+            }
+            
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/analytics/realtime/summary")
+async def get_realtime_summary():
+    """
+    Get real-time analytics summary from pre-aggregated data.
+    This data is updated by the RabbitMQ consumer.
+    """
+    with sentry_sdk.start_transaction(op="analytics.realtime", name="Get Realtime Summary") as transaction:
+        try:
+            # Get today's stats
+            today = datetime.now().date().isoformat()
+            
+            # Fetch pre-aggregated daily stats
+            daily_stats = db.daily_stats.find_one({"date": today}) or {}
+            payment_stats = db.daily_payments.find_one({"date": today}) or {}
+            
+            # Get active players count (played in last hour)
+            one_hour_ago = datetime.now() - timedelta(hours=1)
+            active_players = db.player_stats.count_documents({
+                "last_played": {"$gte": one_hour_ago}
+            })
+            
+            # Calculate unique players for today
+            unique_players = len(daily_stats.get("unique_players", []))
+            
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "today": {
+                    "total_games": daily_stats.get("total_games", 0),
+                    "total_bets": daily_stats.get("total_bets", 0),
+                    "total_payouts": daily_stats.get("total_payouts", 0),
+                    "total_wins": daily_stats.get("total_wins", 0),
+                    "win_rate": (daily_stats.get("total_wins", 0) / daily_stats.get("total_games", 1) * 100) if daily_stats.get("total_games", 0) > 0 else 0,
+                    "unique_players": unique_players,
+                    "active_players_1h": active_players
+                },
+                "payments": {
+                    "total_credits": payment_stats.get("total_credits", 0),
+                    "credit_amount": payment_stats.get("credit_amount", 0),
+                    "total_debits": payment_stats.get("total_debits", 0),
+                    "debit_amount": payment_stats.get("debit_amount", 0),
+                    "net_revenue": payment_stats.get("debit_amount", 0) - payment_stats.get("credit_amount", 0)
+                },
+                "data_source": "realtime_consumer"
             }
             
         except Exception as e:

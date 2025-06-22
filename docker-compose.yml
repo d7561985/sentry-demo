@@ -21,6 +21,19 @@ services:
     networks:
       - sentry-poc-network
 
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sentry-poc-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    networks:
+      - sentry-poc-network
+
   # Frontend
   frontend:
     build: ./services/frontend
@@ -80,10 +93,12 @@ services:
     environment:
       - SENTRY_DSN=${SENTRY_GAME_DSN}
       - MONGODB_URL=mongodb://admin:password@mongodb:27017
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
     networks:
       - sentry-poc-network
     depends_on:
       - mongodb
+      - rabbitmq
 
   # Payment Service
   payment-service:
@@ -94,11 +109,13 @@ services:
     environment:
       - SENTRY_DSN=${SENTRY_PAYMENT_DSN}
       - MONGODB_URL=mongodb://admin:password@mongodb:27017
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
       - ERROR_RATE=0.1  # 10% error rate for demo
     networks:
       - sentry-poc-network
     depends_on:
       - mongodb
+      - rabbitmq
 
   # Analytics Service
   analytics-service:
@@ -109,10 +126,12 @@ services:
     environment:
       - SENTRY_DSN=${SENTRY_ANALYTICS_DSN}
       - MONGODB_URL=mongodb://admin:password@mongodb:27017
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
     networks:
       - sentry-poc-network
     depends_on:
       - mongodb
+      - rabbitmq
 
 networks:
   sentry-poc-network:

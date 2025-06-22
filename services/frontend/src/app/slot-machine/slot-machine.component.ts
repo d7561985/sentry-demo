@@ -454,10 +454,7 @@ export class SlotMachineComponent implements OnInit {
     
     try {
       const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Bearer valid-token'
-        }
+        method: 'GET'
       });
       
       if (response.ok) {
@@ -487,8 +484,7 @@ export class SlotMachineComponent implements OnInit {
       const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer valid-token'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           userId: this.userId,

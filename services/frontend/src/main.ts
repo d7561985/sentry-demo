@@ -22,10 +22,6 @@ Sentry.init({
       maskAllText: false, // For demo, show text
       // Block all media elements
       blockAllMedia: false,
-      // Sample rate for session replays (100% for demo)
-      sessionSampleRate: 1.0,
-      // Sample rate for sessions with errors (100% for demo)
-      errorSampleRate: 1.0,
       // Network details
       networkDetailAllowUrls: ['http://localhost:8080'],
       // Privacy settings for demo

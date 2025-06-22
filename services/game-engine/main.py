@@ -2,12 +2,17 @@ import os
 import json
 import time
 import random
+import logging
 import numpy as np
 from tornado import web, ioloop
 from pymongo import MongoClient
 import sentry_sdk
 from sentry_sdk.integrations.tornado import TornadoIntegration
 from sentry_sdk import start_transaction, start_span
+from rabbitmq_publisher import get_publisher
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # Initialize Sentry
 sentry_sdk.init(
@@ -75,7 +80,33 @@ class CalculateHandler(web.RequestHandler):
                         "symbols": result['symbols'],
                         "timestamp": time.time()
                     }
-                    db.games.insert_one(game_record)
+                    insert_result = db.games.insert_one(game_record)
+                    # Add the ID as string for serialization
+                    game_record['_id'] = str(insert_result.inserted_id)
+                
+                # Publish to RabbitMQ for analytics
+                with start_span(op="mq.publish", description="Publish game result to RabbitMQ") as mq_span:
+                    try:
+                        # Get current trace headers for propagation
+                        current_span = sentry_sdk.get_current_span()
+                        trace_headers = {
+                            'sentry-trace': current_span.to_traceparent() if current_span else '',
+                            'baggage': sentry_sdk.get_baggage() or ''
+                        }
+                        logger.info(f"Publishing with trace headers: {trace_headers}")
+                        
+                        publisher = get_publisher()
+                        publisher.publish_game_result(game_record, trace_headers)
+                        
+                        mq_span.set_data("mq.queue", "analytics.game_results")
+                        mq_span.set_data("mq.routing_key", "game.result")
+                        mq_span.set_tag("mq.published", "true")
+                        
+                    except Exception as mq_error:
+                        # Don't fail the request if RabbitMQ is down
+                        logger.error(f"Failed to publish to RabbitMQ: {mq_error}")
+                        mq_span.set_tag("mq.published", "false")
+                        mq_span.set_tag("mq.error", str(mq_error))
                 
                 # Add custom measurements
                 sentry_sdk.set_measurement("game.bet_amount", bet)

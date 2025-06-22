@@ -45,10 +45,10 @@ The system consists of 8 microservices with different technology stacks:
 8. **Admin Panel (React)** - Legacy code with technical debt
 
 ### Infrastructure Components
-- **Message Queue**: Kafka for async communication
+- **Message Queue**: RabbitMQ for async analytics data collection
 - **Cache**: Redis for sessions and hot data
-- **Databases**: PostgreSQL (main) + MongoDB (analytics)
-- **Storage**: MinIO for game assets
+- **Database**: MongoDB for all data storage (simplified for POC)
+- **Storage**: MinIO for game assets (future enhancement)
 
 ## Development Guidelines
 

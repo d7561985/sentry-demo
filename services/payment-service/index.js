@@ -1,6 +1,7 @@
 const express = require('express');
 const { MongoClient } = require('mongodb');
 const Sentry = require('@sentry/node');
+const { getPublisher } = require('./rabbitmqPublisher');
 
 const app = express();
 const PORT = process.env.PORT || 8083;
@@ -120,7 +121,7 @@ app.post('/process', async (req, res) => {
     }
 
     // Record transaction
-    await Sentry.startSpan(
+    const transaction = await Sentry.startSpan(
       {
         name: 'Record transaction',
         op: 'db.insert',
@@ -131,7 +132,7 @@ app.post('/process', async (req, res) => {
       },
       async () => {
         const netChange = payout - bet;
-        await db.collection('transactions').insertOne({
+        const transaction = {
           user_id: userId,
           type: netChange >= 0 ? 'WIN' : 'LOSS',
           amount: Math.abs(netChange),
@@ -139,9 +140,37 @@ app.post('/process', async (req, res) => {
           payout: payout,
           timestamp: new Date(),
           balance_after: result.value.balance
-        });
+        };
+        await db.collection('transactions').insertOne(transaction);
+        return transaction;
       }
     );
+
+    // Publish to RabbitMQ for analytics
+    try {
+      const publisher = getPublisher();
+      const traceHeaders = {
+        'sentry-trace': Sentry.getActiveSpan()?.toTraceparent() || '',
+        'baggage': Sentry.getBaggage() || ''
+      };
+      
+      const netChange = payout - bet;
+      await publisher.publishPaymentEvent(
+        netChange >= 0 ? 'credit' : 'debit',
+        {
+          userId,
+          amount: Math.abs(netChange),
+          bet,
+          payout,
+          balance_after: result.value.balance,
+          timestamp: transaction.timestamp
+        },
+        traceHeaders
+      );
+    } catch (mqError) {
+      // Don't fail the request if RabbitMQ is down
+      console.error('Failed to publish to RabbitMQ:', mqError);
+    }
 
     // Set custom metrics
     const netChange = payout - bet;
