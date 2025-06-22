@@ -51,6 +51,9 @@ func main() {
 	// API routes
 	api := router.Group("/api/v1")
 	{
+		// User endpoints
+		api.GET("/users/:userId/balance", middleware.Auth(), handlers.GetUserBalance(cfg))
+		
 		// Spin endpoint - main game action
 		api.POST("/spin", middleware.Auth(), handlers.Spin(cfg))
 		

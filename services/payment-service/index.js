@@ -86,14 +86,32 @@ app.post('/process', async (req, res) => {
       },
       async () => {
         const netChange = payout - bet;
-        return await db.collection('users').findOneAndUpdate(
-          { _id: userId },
-          { 
-            $inc: { balance: netChange },
-            $set: { updated_at: new Date() }
-          },
-          { returnDocument: 'after' }
-        );
+        
+        // First check if user exists
+        const existingUser = await db.collection('users').findOne({ _id: userId });
+        
+        if (!existingUser) {
+          // Create new user with starting balance
+          const newUser = {
+            _id: userId,
+            username: 'demo_player',
+            balance: 1000 + netChange, // Starting balance + net change
+            created_at: new Date(),
+            updated_at: new Date()
+          };
+          await db.collection('users').insertOne(newUser);
+          return { value: newUser };
+        } else {
+          // Update existing user
+          return await db.collection('users').findOneAndUpdate(
+            { _id: userId },
+            { 
+              $inc: { balance: netChange },
+              $set: { updated_at: new Date() }
+            },
+            { returnDocument: 'after' }
+          );
+        }
       }
     );
 

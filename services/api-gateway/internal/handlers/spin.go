@@ -14,234 +14,179 @@ import (
 )
 
 type SpinRequest struct {
-	UserID string  `json:"userId"`
-	Bet    float64 `json:"bet"`
+	UserID string  `json:"userId" binding:"required"`
+	Bet    float64 `json:"bet" binding:"required,min=1,max=1000"`
 }
 
-type SpinResponse struct {
-	Win        bool     `json:"win"`
-	Payout     float64  `json:"payout"`
-	NewBalance float64  `json:"newBalance"`
-	Symbols    []string `json:"symbols"`
+// sentryRoundTripper adds Sentry trace headers to outgoing HTTP requests
+type sentryRoundTripper struct {
+	transport http.RoundTripper
+}
+
+func (s *sentryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Get span from request context
+	span := sentry.SpanFromContext(req.Context())
+	if span != nil {
+		// Add trace headers
+		req.Header.Set("sentry-trace", span.ToSentryTrace())
+		
+		// Get baggage from the transaction
+		if transaction := sentry.TransactionFromContext(req.Context()); transaction != nil {
+			if baggage := transaction.ToBaggage(); baggage != "" {
+				req.Header.Set("baggage", baggage)
+			}
+		}
+	}
+	
+	// Use default transport if none provided
+	transport := s.transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	
+	return transport.RoundTrip(req)
 }
 
 func Spin(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get current span from Sentry
-		span := sentry.TransactionFromContext(c.Request.Context())
-		if span == nil {
-			// Create new transaction if none exists
-			span = sentry.StartTransaction(c.Request.Context(), "spin-request", sentry.WithOpName("http.server"))
-			defer span.Finish()
+		// The sentrygin middleware automatically creates a transaction from incoming headers
+		// We just need to work with the existing transaction/span
+		ctx := c.Request.Context()
+		
+		// Get the current span from context (created by sentrygin middleware)
+		span := sentry.TransactionFromContext(ctx)
+		if span != nil {
+			// Update the transaction name to be more specific
+			span.Name = "POST /api/v1/spin"
+			span.SetTag("user.authenticated", "true")
 		}
 
-		// Parse request
+		// Validate request
 		var req SpinRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			c.JSON(400, gin.H{"error": "Invalid request"})
 			return
 		}
 
-		// Get user ID from context (set by auth middleware)
-		userID, _ := c.Get("userId")
-		if req.UserID == "" {
-			req.UserID = userID.(string)
+		// Add user context
+		sentry.ConfigureScope(func(scope *sentry.Scope) {
+			scope.SetUser(sentry.User{
+				ID:       req.UserID,
+				Username: fmt.Sprintf("player_%s", req.UserID),
+			})
+			scope.SetContext("bet", map[string]interface{}{
+				"amount": req.Bet,
+			})
+		})
+
+		// Create HTTP client with Sentry transport
+		client := &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: &sentryRoundTripper{},
 		}
 
-		// Step 1: Check user balance
-		balanceSpan := span.StartChild("user.check_balance")
-		balance, err := checkUserBalance(c, cfg.UserServiceURL, req.UserID, balanceSpan)
-		balanceSpan.Finish()
-		
+		// Forward to game engine
+		gameSpan := sentry.StartSpan(ctx, "http.client", sentry.WithDescription("POST game-engine:/spin"))
+		gameCtx := gameSpan.Context()
+		defer gameSpan.Finish()
+
+		gameReq := map[string]interface{}{
+			"userId": req.UserID,
+			"bet":    req.Bet,
+		}
+
+		body, _ := json.Marshal(gameReq)
+		httpReq, err := http.NewRequestWithContext(gameCtx, "POST", "http://game-engine:8082/calculate", bytes.NewBuffer(body))
 		if err != nil {
-			sentry.CaptureException(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check balance"})
+			c.JSON(500, gin.H{"error": "Failed to create request"})
 			return
 		}
 
-		if balance < req.Bet {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient balance"})
-			return
-		}
+		httpReq.Header.Set("Content-Type", "application/json")
 
-		// Step 2: Calculate game result
-		gameSpan := span.StartChild("game.calculate_result")
-		gameResult, err := calculateGameResult(c, cfg.GameServiceURL, req.UserID, req.Bet, gameSpan)
-		gameSpan.Finish()
-		
+		resp, err := client.Do(httpReq)
 		if err != nil {
+			gameSpan.Status = sentry.SpanStatusInternalError
 			sentry.CaptureException(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Game engine error"})
+			c.JSON(500, gin.H{"error": "Game engine unavailable"})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			gameSpan.Status = sentry.SpanStatusInternalError
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			c.JSON(resp.StatusCode, gin.H{"error": string(bodyBytes)})
 			return
 		}
 
-		// Step 3: Process payment
-		paymentSpan := span.StartChild("payment.process")
-		newBalance, err := processPayment(c, cfg.PaymentServiceURL, req.UserID, req.Bet, gameResult.Payout, paymentSpan)
-		paymentSpan.Finish()
-		
+		// Parse game result
+		var gameResult map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&gameResult); err != nil {
+			c.JSON(500, gin.H{"error": "Invalid game response"})
+			return
+		}
+
+		// Extract values for payment processing
+		win := gameResult["win"].(bool)
+		payout := gameResult["payout"].(float64)
+
+		// Process payment
+		paymentSpan := sentry.StartSpan(ctx, "http.client", sentry.WithDescription("POST payment-service:/process"))
+		paymentCtx := paymentSpan.Context()
+		defer paymentSpan.Finish()
+
+		paymentReq := map[string]interface{}{
+			"userId": req.UserID,
+			"bet":    req.Bet,
+			"payout": payout,
+		}
+
+		paymentBody, _ := json.Marshal(paymentReq)
+		paymentHttpReq, err := http.NewRequestWithContext(paymentCtx, "POST", "http://payment-service:8083/process", bytes.NewBuffer(paymentBody))
 		if err != nil {
-			sentry.CaptureException(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment processing failed"})
+			c.JSON(500, gin.H{"error": "Failed to create payment request"})
 			return
 		}
 
-		// Return result
-		response := SpinResponse{
-			Win:        gameResult.Win,
-			Payout:     gameResult.Payout,
-			NewBalance: newBalance,
-			Symbols:    gameResult.Symbols,
+		paymentHttpReq.Header.Set("Content-Type", "application/json")
+
+		paymentResp, err := client.Do(paymentHttpReq)
+		if err != nil {
+			paymentSpan.Status = sentry.SpanStatusInternalError
+			sentry.CaptureException(err)
+			c.JSON(500, gin.H{"error": "Payment service unavailable"})
+			return
+		}
+		defer paymentResp.Body.Close()
+
+		if paymentResp.StatusCode != 200 {
+			paymentSpan.Status = sentry.SpanStatusInternalError
+			bodyBytes, _ := io.ReadAll(paymentResp.Body)
+			c.JSON(paymentResp.StatusCode, gin.H{"error": string(bodyBytes)})
+			return
 		}
 
-		c.JSON(http.StatusOK, response)
+		// Get updated balance
+		var paymentResult map[string]interface{}
+		if err := json.NewDecoder(paymentResp.Body).Decode(&paymentResult); err != nil {
+			c.JSON(500, gin.H{"error": "Invalid payment response"})
+			return
+		}
+
+		// Update game result with new balance
+		gameResult["newBalance"] = paymentResult["newBalance"]
+
+		// Add custom tags
+		if span != nil {
+			span.SetTag("spin.win", fmt.Sprintf("%v", win))
+			span.SetTag("spin.bet", fmt.Sprintf("%.2f", req.Bet))
+			span.SetTag("spin.payout", fmt.Sprintf("%.2f", payout))
+		}
+
+		// Send metrics
+		sentry.CaptureMessage(fmt.Sprintf("Spin completed - User: %s, Win: %v, Payout: %.2f", req.UserID, win, payout))
+
+		c.JSON(200, gameResult)
 	}
-}
-
-func checkUserBalance(c *gin.Context, userServiceURL, userID string, parentSpan *sentry.Span) (float64, error) {
-	span := parentSpan.StartChild("http.client")
-	span.Description = "GET /balance"
-	defer span.Finish()
-
-	url := fmt.Sprintf("%s/balance/%s", userServiceURL, userID)
-	
-	// Create request with trace headers
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	// Propagate trace context
-	req.Header.Set("sentry-trace", span.ToSentryTrace())
-	if baggage := c.GetHeader("baggage"); baggage != "" {
-		req.Header.Set("baggage", baggage)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		span.Status = sentry.SpanStatusInternalError
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		span.Status = sentry.SpanStatusInternalError
-		return 0, fmt.Errorf("user service returned status %d", resp.StatusCode)
-	}
-
-	var result struct {
-		Balance float64 `json:"balance"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
-	}
-
-	span.Status = sentry.SpanStatusOK
-	return result.Balance, nil
-}
-
-func calculateGameResult(c *gin.Context, gameServiceURL, userID string, bet float64, parentSpan *sentry.Span) (*SpinResponse, error) {
-	span := parentSpan.StartChild("http.client")
-	span.Description = "POST /calculate"
-	defer span.Finish()
-
-	url := fmt.Sprintf("%s/calculate", gameServiceURL)
-	payload := map[string]interface{}{
-		"userId": userID,
-		"bet":    bet,
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Propagate trace context
-	req.Header.Set("sentry-trace", span.ToSentryTrace())
-	if baggage := c.GetHeader("baggage"); baggage != "" {
-		req.Header.Set("baggage", baggage)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		span.Status = sentry.SpanStatusInternalError
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		span.Status = sentry.SpanStatusInternalError
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("game service error: %s", string(body))
-	}
-
-	var result SpinResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	span.Status = sentry.SpanStatusOK
-	return &result, nil
-}
-
-func processPayment(c *gin.Context, paymentServiceURL, userID string, bet, payout float64, parentSpan *sentry.Span) (float64, error) {
-	span := parentSpan.StartChild("http.client")
-	span.Description = "POST /process"
-	defer span.Finish()
-
-	url := fmt.Sprintf("%s/process", paymentServiceURL)
-	payload := map[string]interface{}{
-		"userId": userID,
-		"bet":    bet,
-		"payout": payout,
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return 0, err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Propagate trace context
-	req.Header.Set("sentry-trace", span.ToSentryTrace())
-	if baggage := c.GetHeader("baggage"); baggage != "" {
-		req.Header.Set("baggage", baggage)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		span.Status = sentry.SpanStatusInternalError
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		span.Status = sentry.SpanStatusInternalError
-		body, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("payment service error: %s", string(body))
-	}
-
-	var result struct {
-		NewBalance float64 `json:"newBalance"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
-	}
-
-	span.Status = sentry.SpanStatusOK
-	return result.NewBalance, nil
 }
