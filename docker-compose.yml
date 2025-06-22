@@ -1,0 +1,108 @@
+services:
+  # Infrastructure
+  mongodb:
+    image: mongo:5.0
+    container_name: sentry-poc-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - sentry-poc-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sentry-poc-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - sentry-poc-network
+
+  # Frontend
+  frontend:
+    build: ./services/frontend
+    container_name: sentry-poc-frontend
+    ports:
+      - "4200:4200"
+    environment:
+      - SENTRY_DSN=${SENTRY_FRONTEND_DSN}
+      - API_URL=http://localhost:8080
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - api-gateway
+
+  # API Gateway
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: sentry-poc-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SENTRY_DSN=${SENTRY_GATEWAY_DSN}
+      - USER_SERVICE_URL=http://user-service:8081
+      - GAME_SERVICE_URL=http://game-engine:8082
+      - PAYMENT_SERVICE_URL=http://payment-service:8083
+      - REDIS_URL=redis:6379
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - redis
+      - user-service
+      - game-engine
+      - payment-service
+
+  # User Service
+  user-service:
+    build: ./services/user-service
+    container_name: sentry-poc-user
+    ports:
+      - "8081:8081"
+    environment:
+      - SENTRY_DSN=${SENTRY_USER_DSN}
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017
+      - REDIS_URL=redis:6379
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - mongodb
+      - redis
+
+  # Game Engine
+  game-engine:
+    build: ./services/game-engine
+    container_name: sentry-poc-game
+    ports:
+      - "8082:8082"
+    environment:
+      - SENTRY_DSN=${SENTRY_GAME_DSN}
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - mongodb
+
+  # Payment Service
+  payment-service:
+    build: ./services/payment-service
+    container_name: sentry-poc-payment
+    ports:
+      - "8083:8083"
+    environment:
+      - SENTRY_DSN=${SENTRY_PAYMENT_DSN}
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017
+      - ERROR_RATE=0.1  # 10% error rate for demo
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - mongodb
+
+networks:
+  sentry-poc-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
