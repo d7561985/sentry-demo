@@ -58,7 +58,6 @@ coverage/
 htmlcov/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 
 # Temporary files
