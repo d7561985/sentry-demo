@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Frontend with dev server
+  frontend:
+    build: 
+      context: ./services/frontend
+      dockerfile: Dockerfile.dev
+    container_name: sentry-poc-frontend-dev
+    ports:
+      - "4200:4200"
+    environment:
+      - SENTRY_DSN=${SENTRY_FRONTEND_DSN}
+    volumes:
+      # Mount source code for hot reload
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/angular.json:/app/angular.json
+      - ./services/frontend/tsconfig.json:/app/tsconfig.json
+      - ./services/frontend/tsconfig.app.json:/app/tsconfig.app.json
+    networks:
+      - sentry-poc-network
+    depends_on:
+      - api-gateway
+
+  # All other services remain the same as in docker-compose.yml
+  # They are automatically inherited when using docker-compose -f docker-compose.yml -f docker-compose.dev.yml

@@ -6,9 +6,10 @@ import { BrowserTracing } from '@sentry/tracing';
 import { AppModule } from './app/app.module';
 import { environment } from './environments/environment';
 
-// Initialize Sentry
+// Initialize Sentry with Session Replay
 Sentry.init({
   dsn: environment.sentryDsn,
+  release: (environment as any).version || '1.0.0',
   integrations: [
     new Sentry.BrowserTracing({
       // CRITICAL: This must match your API gateway URL exactly
@@ -16,11 +17,30 @@ Sentry.init({
       tracingOrigins: ['localhost', 'http://localhost:8080', /^http:\/\/localhost:8080\/api\//],
       routingInstrumentation: Sentry.routingInstrumentation,
     }),
+    new Sentry.Replay({
+      // Mask all text content for privacy (default)
+      maskAllText: false, // For demo, show text
+      // Block all media elements
+      blockAllMedia: false,
+      // Sample rate for session replays (100% for demo)
+      sessionSampleRate: 1.0,
+      // Sample rate for sessions with errors (100% for demo)
+      errorSampleRate: 1.0,
+      // Network details
+      networkDetailAllowUrls: ['http://localhost:8080'],
+      // Privacy settings for demo
+      maskAllInputs: false, // Show input values in demo
+      // Maximum replay duration (5 minutes)
+      maxReplayDuration: 300000,
+    }),
   ],
   tracesSampleRate: 1.0,
+  // Session Replay sample rates
+  replaysSessionSampleRate: 1.0, // 100% for demo
+  replaysOnErrorSampleRate: 1.0, // 100% for errors
   environment: environment.production ? 'production' : 'development',
-  // Debug mode to see trace propagation
-  debug: true,
+  // Debug mode to see trace propagation (disable in production)
+  debug: !environment.production,
 });
 
 if (environment.production) {

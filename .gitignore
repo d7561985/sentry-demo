@@ -98,6 +98,7 @@ appendonly.aof
 
 # Sentry
 .sentryclirc
+sentry.properties
 
 # Package lock files (if you want to exclude them)
 # package-lock.json
