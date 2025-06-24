@@ -16,6 +16,12 @@ Sentry.init({
       // It controls which outgoing requests get trace headers attached
       tracingOrigins: ['localhost', 'http://localhost:8080', /^http:\/\/localhost:8080\/api\//],
       routingInstrumentation: Sentry.routingInstrumentation,
+      // Auto-finish transactions after 3 seconds of inactivity
+      idleTimeout: 3000,
+      // Maximum transaction duration 30 seconds
+      finalTimeout: 30000,
+      // Don't create background transactions for every interaction
+      markBackgroundTransactions: false,
     }),
     new Sentry.Replay({
       // Mask all text content for privacy (default)

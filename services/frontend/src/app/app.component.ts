@@ -5,7 +5,11 @@ import { Component } from '@angular/core';
   template: `
     <div class="container">
       <h1 style="text-align: center; margin: 40px 0;">🎰 Sentry POC - iGaming Demo</h1>
-      <app-slot-machine></app-slot-machine>
+      <nav style="text-align: center; margin-bottom: 20px;">
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" style="margin: 0 10px; color: #4CAF50; text-decoration: none;">Slot Machine</a>
+        <a routerLink="/metrics" routerLinkActive="active" style="margin: 0 10px; color: #4CAF50; text-decoration: none;">Business Metrics</a>
+      </nav>
+      <router-outlet></router-outlet>
     </div>
   `,
   styles: []

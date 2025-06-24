@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
+import sys
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,8 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from rabbitmq_consumer import AnalyticsConsumer
+
+from metrics import BusinessMetrics, MetricAnomalyDetector
 
 logging.basicConfig(level=logging.INFO)
 
@@ -310,6 +313,479 @@ async def get_realtime_summary():
         except Exception as e:
             sentry_sdk.capture_exception(e)
             raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/business-metrics/rtp")
+async def get_rtp_metrics(hours: int = 24):
+    """
+    Get RTP (Return to Player) metrics over specified time period.
+    """
+    with BusinessMetrics.start_business_transaction("analytics.rtp_metrics") as transaction:
+        try:
+            cutoff_time = datetime.now() - timedelta(hours=hours)
+            
+            # Calculate RTP from games collection
+            with sentry_sdk.start_span(op="db.aggregate", description="Calculate RTP metrics") as span:
+                pipeline = [
+                    {
+                        "$match": {
+                            "timestamp": {"$gte": cutoff_time.timestamp()}
+                        }
+                    },
+                    {
+                        "$facet": {
+                            # Overall RTP
+                            "overall": [
+                                {
+                                    "$group": {
+                                        "_id": None,
+                                        "total_bets": {"$sum": "$bet"},
+                                        "total_payouts": {"$sum": "$payout"},
+                                        "game_count": {"$sum": 1}
+                                    }
+                                }
+                            ],
+                            # RTP by hour
+                            "hourly": [
+                                {
+                                    "$group": {
+                                        "_id": {
+                                            "$dateToString": {
+                                                "format": "%Y-%m-%d %H:00",
+                                                "date": {"$toDate": {"$multiply": ["$timestamp", 1000]}}
+                                            }
+                                        },
+                                        "total_bets": {"$sum": "$bet"},
+                                        "total_payouts": {"$sum": "$payout"},
+                                        "game_count": {"$sum": 1}
+                                    }
+                                },
+                                {"$sort": {"_id": -1}}
+                            ],
+                            # RTP by player
+                            "by_player": [
+                                {
+                                    "$group": {
+                                        "_id": "$user_id",
+                                        "total_bets": {"$sum": "$bet"},
+                                        "total_payouts": {"$sum": "$payout"},
+                                        "game_count": {"$sum": 1}
+                                    }
+                                },
+                                {
+                                    "$project": {
+                                        "user_id": "$_id",
+                                        "total_bets": 1,
+                                        "total_payouts": 1,
+                                        "game_count": 1,
+                                        "rtp": {
+                                            "$cond": [
+                                                {"$gt": ["$total_bets", 0]},
+                                                {"$multiply": [{"$divide": ["$total_payouts", "$total_bets"]}, 100]},
+                                                0
+                                            ]
+                                        }
+                                    }
+                                },
+                                {"$sort": {"rtp": -1}},
+                                {"$limit": 10}
+                            ]
+                        }
+                    }
+                ]
+                
+                result = list(db.games.aggregate(pipeline))
+                if not result:
+                    return {"error": "No data available"}
+                
+                data = result[0]
+                
+                # Calculate overall RTP
+                overall_data = data["overall"][0] if data["overall"] else None
+                overall_rtp = 0
+                if overall_data and overall_data["total_bets"] > 0:
+                    overall_rtp = (overall_data["total_payouts"] / overall_data["total_bets"]) * 100
+                    
+                    # Track and check for anomalies
+                    anomaly_detector = MetricAnomalyDetector()
+                    anomaly_detector.track_with_anomaly_detection(
+                        BusinessMetrics.RTP,
+                        overall_rtp,
+                        unit="percent",
+                        tags={"period": f"{hours}h"}
+                    )
+                
+                # Calculate hourly RTP
+                hourly_rtp = []
+                for hour_data in data["hourly"]:
+                    if hour_data["total_bets"] > 0:
+                        rtp = (hour_data["total_payouts"] / hour_data["total_bets"]) * 100
+                        hourly_rtp.append({
+                            "hour": hour_data["_id"],
+                            "rtp": round(rtp, 2),
+                            "total_bets": hour_data["total_bets"],
+                            "total_payouts": hour_data["total_payouts"],
+                            "game_count": hour_data["game_count"]
+                        })
+                
+                span.set_data("hours_analyzed", len(hourly_rtp))
+                span.set_data("overall_rtp", overall_rtp)
+                
+                return {
+                    "period_hours": hours,
+                    "overall_rtp": round(overall_rtp, 2),
+                    "total_bets": overall_data["total_bets"] if overall_data else 0,
+                    "total_payouts": overall_data["total_payouts"] if overall_data else 0,
+                    "total_games": overall_data["game_count"] if overall_data else 0,
+                    "hourly_breakdown": hourly_rtp,
+                    "top_players_by_rtp": data["by_player"],
+                    "rtp_threshold": {
+                        "min": 85,
+                        "max": 98,
+                        "status": "normal" if 85 <= overall_rtp <= 98 else "anomaly"
+                    }
+                }
+                
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/business-metrics/active-sessions")
+async def get_active_sessions():
+    """
+    Get active gaming sessions and player engagement metrics.
+    """
+    with BusinessMetrics.start_business_transaction("analytics.active_sessions") as transaction:
+        try:
+            # Define session timeout (30 minutes)
+            session_timeout = 30 * 60  # 30 minutes in seconds
+            cutoff_time = time.time() - session_timeout
+            
+            with sentry_sdk.start_span(op="db.aggregate", description="Calculate active sessions") as span:
+                # Get active players
+                pipeline = [
+                    {
+                        "$match": {
+                            "timestamp": {"$gte": cutoff_time}
+                        }
+                    },
+                    {
+                        "$group": {
+                            "_id": "$user_id",
+                            "last_game": {"$max": "$timestamp"},
+                            "games_in_session": {"$sum": 1},
+                            "session_bets": {"$sum": "$bet"},
+                            "session_payouts": {"$sum": "$payout"}
+                        }
+                    },
+                    {
+                        "$project": {
+                            "user_id": "$_id",
+                            "last_game": 1,
+                            "games_in_session": 1,
+                            "session_bets": 1,
+                            "session_payouts": 1,
+                            "session_duration": {"$subtract": ["$last_game", cutoff_time]}
+                        }
+                    }
+                ]
+                
+                active_sessions = list(db.games.aggregate(pipeline))
+                
+                # Track active sessions metric
+                session_count = len(active_sessions)
+                BusinessMetrics.track_metric(BusinessMetrics.ACTIVE_SESSIONS, session_count, "none")
+                
+                # Calculate engagement metrics
+                total_session_bets = sum(s["session_bets"] for s in active_sessions)
+                avg_games_per_session = sum(s["games_in_session"] for s in active_sessions) / session_count if session_count > 0 else 0
+                
+                # Get session distribution by duration
+                duration_buckets = {
+                    "0-5min": 0,
+                    "5-15min": 0,
+                    "15-30min": 0
+                }
+                
+                for session in active_sessions:
+                    duration_minutes = session["session_duration"] / 60
+                    if duration_minutes <= 5:
+                        duration_buckets["0-5min"] += 1
+                    elif duration_minutes <= 15:
+                        duration_buckets["5-15min"] += 1
+                    else:
+                        duration_buckets["15-30min"] += 1
+                
+                span.set_data("active_sessions", session_count)
+                
+                return {
+                    "active_sessions": session_count,
+                    "total_active_bets": total_session_bets,
+                    "avg_games_per_session": round(avg_games_per_session, 1),
+                    "session_duration_distribution": duration_buckets,
+                    "sessions_detail": [
+                        {
+                            "user_id": s["user_id"],
+                            "games_played": s["games_in_session"],
+                            "total_bet": s["session_bets"],
+                            "total_payout": s["session_payouts"],
+                            "session_profit": s["session_bets"] - s["session_payouts"],
+                            "duration_minutes": round(s["session_duration"] / 60, 1)
+                        }
+                        for s in sorted(active_sessions, key=lambda x: x["session_bets"], reverse=True)[:10]
+                    ]
+                }
+                
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/business-metrics/financial-summary")
+async def get_financial_summary(days: int = 7):
+    """
+    Get financial summary including revenue, deposits, withdrawals.
+    """
+    with BusinessMetrics.start_business_transaction("analytics.financial_summary") as transaction:
+        try:
+            cutoff_date = datetime.now() - timedelta(days=days)
+            
+            with sentry_sdk.start_span(op="db.aggregate", description="Calculate financial metrics") as span:
+                # Get transaction summary
+                pipeline = [
+                    {
+                        "$match": {
+                            "timestamp": {"$gte": cutoff_date}
+                        }
+                    },
+                    {
+                        "$facet": {
+                            # Daily breakdown
+                            "daily": [
+                                {
+                                    "$group": {
+                                        "_id": {
+                                            "$dateToString": {
+                                                "format": "%Y-%m-%d",
+                                                "date": "$timestamp"
+                                            }
+                                        },
+                                        "total_bets": {"$sum": "$bet"},
+                                        "total_payouts": {"$sum": "$payout"},
+                                        "transactions": {"$sum": 1},
+                                        "unique_players": {"$addToSet": "$user_id"}
+                                    }
+                                },
+                                {
+                                    "$project": {
+                                        "date": "$_id",
+                                        "total_bets": 1,
+                                        "total_payouts": 1,
+                                        "net_revenue": {"$subtract": ["$total_bets", "$total_payouts"]},
+                                        "transactions": 1,
+                                        "unique_players": {"$size": "$unique_players"},
+                                        "house_edge": {
+                                            "$cond": [
+                                                {"$gt": ["$total_bets", 0]},
+                                                {"$multiply": [
+                                                    {"$divide": [
+                                                        {"$subtract": ["$total_bets", "$total_payouts"]},
+                                                        "$total_bets"
+                                                    ]},
+                                                    100
+                                                ]},
+                                                0
+                                            ]
+                                        }
+                                    }
+                                },
+                                {"$sort": {"date": -1}}
+                            ],
+                            # Overall summary
+                            "summary": [
+                                {
+                                    "$group": {
+                                        "_id": None,
+                                        "total_bets": {"$sum": "$bet"},
+                                        "total_payouts": {"$sum": "$payout"},
+                                        "total_transactions": {"$sum": 1},
+                                        "wins": {"$sum": {"$cond": ["$win", 1, 0]}},
+                                        "losses": {"$sum": {"$cond": ["$win", 0, 1]}}
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+                
+                result = list(db.transactions.aggregate(pipeline))
+                if not result:
+                    return {"error": "No transaction data available"}
+                
+                data = result[0]
+                summary = data["summary"][0] if data["summary"] else {}
+                
+                # Calculate key metrics
+                total_revenue = summary.get("total_bets", 0) - summary.get("total_payouts", 0)
+                win_rate = (summary.get("wins", 0) / summary.get("total_transactions", 1)) * 100 if summary.get("total_transactions", 0) > 0 else 0
+                
+                # Track revenue metric
+                BusinessMetrics.track_metric(BusinessMetrics.REVENUE_NET, total_revenue, "currency")
+                
+                # Check for revenue anomalies
+                if total_revenue < 0:
+                    sentry_sdk.capture_message(
+                        f"Negative revenue detected over {days} days: ${total_revenue}",
+                        level="warning"
+                    )
+                
+                span.set_data("days_analyzed", days)
+                span.set_data("total_revenue", total_revenue)
+                
+                return {
+                    "period_days": days,
+                    "summary": {
+                        "total_revenue": round(total_revenue, 2),
+                        "total_bets": summary.get("total_bets", 0),
+                        "total_payouts": summary.get("total_payouts", 0),
+                        "total_transactions": summary.get("total_transactions", 0),
+                        "win_rate": round(win_rate, 2),
+                        "average_bet": round(summary.get("total_bets", 0) / summary.get("total_transactions", 1), 2) if summary.get("total_transactions", 0) > 0 else 0
+                    },
+                    "daily_breakdown": data["daily"],
+                    "revenue_health": {
+                        "status": "healthy" if total_revenue > 0 else "warning",
+                        "message": "Revenue positive" if total_revenue > 0 else "Revenue negative - investigation required"
+                    }
+                }
+                
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/business-metrics/sessions")
+async def get_session_metrics():
+    """
+    Simplified session metrics endpoint for frontend dashboard.
+    """
+    try:
+        # Get active sessions from the active-sessions endpoint data
+        thirty_minutes_ago = time.time() - (30 * 60)
+        
+        # Count unique active users
+        active_users = db.games.distinct(
+            "user_id",
+            {"timestamp": {"$gte": thirty_minutes_ago}}
+        )
+        
+        # Calculate average session duration
+        pipeline = [
+            {
+                "$match": {
+                    "timestamp": {"$gte": thirty_minutes_ago}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "first_game": {"$min": "$timestamp"},
+                    "last_game": {"$max": "$timestamp"},
+                    "game_count": {"$sum": 1}
+                }
+            },
+            {
+                "$match": {
+                    "game_count": {"$gt": 1}
+                }
+            },
+            {
+                "$project": {
+                    "duration": {"$subtract": ["$last_game", "$first_game"]}
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "avg_duration": {"$avg": "$duration"}
+                }
+            }
+        ]
+        
+        duration_result = list(db.games.aggregate(pipeline))
+        avg_duration = duration_result[0]["avg_duration"] if duration_result else 300  # Default 5 minutes
+        
+        return {
+            "active_sessions": len(active_users),
+            "avg_duration": avg_duration,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error in session metrics: {str(e)}")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/business-metrics/financial")
+async def get_financial_metrics(hours: int = 24):
+    """
+    Simplified financial metrics for frontend dashboard.
+    """
+    try:
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        # Get payment transactions
+        pipeline = [
+            {
+                "$match": {
+                    "timestamp": {"$gte": cutoff_time}
+                }
+            },
+            {
+                "$facet": {
+                    "deposits": [
+                        {"$match": {"type": "credit"}},
+                        {
+                            "$group": {
+                                "_id": None,
+                                "count": {"$sum": 1},
+                                "total": {"$sum": "$amount"},
+                                "avg": {"$avg": "$amount"}
+                            }
+                        }
+                    ],
+                    "withdrawals": [
+                        {"$match": {"type": "debit"}},
+                        {
+                            "$group": {
+                                "_id": None,
+                                "count": {"$sum": 1},
+                                "total": {"$sum": "$amount"},
+                                "avg": {"$avg": "$amount"}
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+        
+        result = list(db.transactions.aggregate(pipeline))
+        
+        deposits = result[0]["deposits"][0] if result and result[0]["deposits"] else {"count": 0, "total": 0, "avg": 0}
+        withdrawals = result[0]["withdrawals"][0] if result and result[0]["withdrawals"] else {"count": 0, "total": 0, "avg": 0}
+        
+        return {
+            "period_hours": hours,
+            "total_revenue": deposits.get("total", 0) - withdrawals.get("total", 0),
+            "deposit_count": deposits.get("count", 0),
+            "avg_deposit": deposits.get("avg", 0),
+            "withdrawal_count": withdrawals.get("count", 0),
+            "avg_withdrawal": withdrawals.get("avg", 0),
+            "total_deposits": deposits.get("total", 0),
+            "total_withdrawals": withdrawals.get("total", 0)
+        }
+        
+    except Exception as e:
+        print(f"Error in financial metrics: {str(e)}")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

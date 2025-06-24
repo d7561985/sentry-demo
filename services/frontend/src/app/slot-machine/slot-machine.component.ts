@@ -338,35 +338,47 @@ export class SlotMachineComponent implements OnInit {
     this.isSpinning = true;
     this.error = null;
     
-    // Start a transaction for the spin action
+    // IMPORTANT: Finish any existing transaction to avoid span accumulation
+    const existingTransaction = Sentry.getCurrentHub().getScope().getTransaction();
+    if (existingTransaction) {
+      existingTransaction.finish();
+    }
+    
+    // Start a NEW transaction for the spin action
     const transaction = Sentry.startTransaction({
       name: 'slot-machine-spin',
       op: 'user-action'
     });
     
-    Sentry.getCurrentHub().configureScope(scope => scope.setSpan(transaction));
+    // Set as active transaction
+    Sentry.getCurrentScope().setSpan(transaction);
     
     try {
       const result = await this.gameService.spin(this.userId, 10).toPromise();
       if (result) {
-        // Simulate spinning animation duration
-        setTimeout(() => {
-          this.lastResult = result;
-          this.balance = result.newBalance;
-          // Show the result symbols (use first 3 or repeat if less)
-          if (result.symbols && result.symbols.length > 0) {
-            this.reels = [
-              result.symbols[0] || '🍒',
-              result.symbols[1] || result.symbols[0] || '🍒',
-              result.symbols[2] || result.symbols[0] || '🍒'
-            ];
-          }
-          this.isSpinning = false;
-        }, 2000);
-        
         // Add custom context
         transaction.setTag('win', result.win);
         transaction.setTag('payout', result.payout);
+        
+        // Wait for animation to complete before closing transaction
+        await new Promise<void>(resolve => {
+          setTimeout(() => {
+            this.lastResult = result;
+            this.balance = result.newBalance;
+            // Show the result symbols (use first 3 or repeat if less)
+            if (result.symbols && result.symbols.length > 0) {
+              this.reels = [
+                result.symbols[0] || '🍒',
+                result.symbols[1] || result.symbols[0] || '🍒',
+                result.symbols[2] || result.symbols[0] || '🍒'
+              ];
+            }
+            this.isSpinning = false;
+            resolve();
+          }, 2000);
+        });
+        
+        transaction.setStatus('ok');
       }
     } catch (error: any) {
       this.error = error.message || 'Something went wrong!';
@@ -374,6 +386,7 @@ export class SlotMachineComponent implements OnInit {
       transaction.setStatus('internal_error');
       Sentry.captureException(error);
     } finally {
+      // Close transaction after everything is done
       transaction.finish();
     }
   }

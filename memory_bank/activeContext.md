@@ -1,6 +1,6 @@
 # Active Context - Current Focus
 
-## Current Mode: ARCHIVE - Ready for Next Task
+## Current Mode: PLAN - Scenario 4
 
 ## Previous Work Completed
 - Scenario 1: Distributed Tracing ✅ ARCHIVED
@@ -11,7 +11,119 @@
 - Scenario 3: Performance Monitoring ✅ ARCHIVED
 
 ## Active Focus
-Awaiting next task selection
+**Scenario 4: Business Metrics Monitoring**
+
+## Scenario 4 Implementation Plan
+
+### Overview
+Demonstrate Sentry's custom metrics capabilities for tracking critical business KPIs in an iGaming platform. Show how to monitor RTP (Return to Player), financial metrics, and player activity in real-time.
+
+### Key Business Metrics to Track
+
+1. **Game Metrics (Game Engine)**
+   - RTP (Return to Player) percentage
+   - Win/loss ratios per session
+   - Bet volumes and patterns
+   - Game round durations
+
+2. **Financial Metrics (Payment Service)**
+   - Deposit/withdrawal volumes
+   - Payment success/failure rates
+   - Revenue tracking
+   - Average transaction size
+
+3. **Player Activity (Analytics Service)**
+   - Active sessions count
+   - Player retention rates
+   - Session duration metrics
+   - Geographic distribution
+
+4. **System Health Metrics**
+   - API response times by endpoint
+   - Queue processing rates
+   - Cache hit/miss ratios
+   - Service availability
+
+### Implementation Details
+
+#### 1. Game Engine Service Enhancements
+```python
+# Custom metrics for each spin
+sentry_sdk.set_measurement("bet_amount", bet_amount, "currency")
+sentry_sdk.set_measurement("payout", payout, "currency")
+sentry_sdk.set_measurement("rtp_current", current_rtp, "percentage")
+sentry_sdk.set_measurement("spin_duration", duration, "millisecond")
+```
+
+#### 2. Payment Service Metrics
+```javascript
+// Track financial metrics
+Sentry.setMeasurement("transaction_amount", amount, "currency");
+Sentry.setMeasurement("payment_duration", duration, "millisecond");
+Sentry.setTag("payment_method", method);
+Sentry.setTag("transaction_type", type);
+```
+
+#### 3. Analytics Service Aggregation
+```python
+# Aggregate and send business metrics
+metrics = {
+    "active_sessions": count_active_sessions(),
+    "hourly_rtp": calculate_hourly_rtp(),
+    "total_revenue": get_revenue_metrics(),
+    "player_count": get_unique_players()
+}
+```
+
+#### 4. Frontend Dashboard
+- Real-time RTP display
+- Active sessions counter
+- Revenue metrics visualization
+- Performance indicators
+
+### Demo Scenarios
+
+1. **RTP Anomaly Detection**
+   - Button to temporarily skew RTP (e.g., 150% or 50%)
+   - Show alert triggering in Sentry
+   - Demonstrate metric history and trends
+
+2. **Revenue Monitoring**
+   - Simulate revenue spike/drop
+   - Show financial dashboard
+   - Alert on unusual patterns
+
+3. **Player Activity Surge**
+   - Simulate sudden increase in active sessions
+   - Show system behavior under load
+   - Monitor resource usage
+
+### Sentry Configuration
+
+1. **Custom Units**
+   - currency: For monetary values
+   - percentage: For RTP and rates
+   - count: For sessions and players
+   - millisecond: For durations
+
+2. **Dashboards**
+   - Business KPIs Dashboard
+   - Financial Overview
+   - Player Activity Monitor
+   - System Health Metrics
+
+3. **Alerts**
+   - RTP deviation > 5% from baseline
+   - Revenue drop > 20% hour-over-hour
+   - Active sessions > 1000
+   - Payment failure rate > 10%
+
+### Success Criteria
+- All services sending custom metrics
+- Business dashboard showing real-time KPIs
+- Alerts configured and triggering correctly
+- Demo scenarios working smoothly
+- Clear value demonstration for iGaming platform monitoring
 
 ## Scenario 2 Requirements Analysis
 ### Frontend JS Errors Needed:

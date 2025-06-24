@@ -1,6 +1,6 @@
 # Tasks - Single Source of Truth
 
-## Active Mode: IMPLEMENT - Scenario 3 Complete
+## Active Mode: PLAN - Scenario 4 Ready
 
 ## Current Tasks
 
@@ -81,6 +81,39 @@ Archive: `/docs/archive/2025-06-21_scenario1_distributed_tracing.md`
 - Aesthetic design with dark theme and glow effects
 - No external libraries or complex state management
 
+## Current Tasks
+
+### Scenario 4: Business Metrics Monitoring
+- [x] Plan Scenario 4: Business metrics and custom measurements ✅
+- [ ] Implement RTP tracking in Game Engine Service
+  - [ ] Calculate and send RTP metrics per spin
+  - [ ] Track win/loss ratios
+  - [ ] Send custom measurements to Sentry
+- [ ] Add financial metrics to Payment Service
+  - [ ] Track deposit/withdrawal volumes
+  - [ ] Monitor payment failure rates
+  - [ ] Implement revenue tracking
+- [ ] Create metric aggregation in Analytics Service
+  - [ ] Aggregate active sessions
+  - [ ] Calculate hourly/daily RTP
+  - [ ] Track bet volumes and patterns
+- [ ] Build business metrics dashboard in Frontend
+  - [ ] Display real-time RTP
+  - [ ] Show active sessions
+  - [ ] Add revenue metrics
+- [ ] Configure Sentry custom measurements
+  - [ ] Set up custom metrics in all services
+  - [ ] Create business dashboards
+  - [ ] Configure measurement units
+- [ ] Set up business alerts and anomaly detection
+  - [ ] RTP deviation alerts
+  - [ ] Revenue drop detection
+  - [ ] Session anomaly monitoring
+- [ ] Create demo scenarios for business metrics
+  - [ ] RTP manipulation scenario
+  - [ ] Revenue spike/drop simulation
+  - [ ] Session surge testing
+
 ## Next Phase Decision
 Project complexity assessment: SIMPLIFIED
 - Scenario-based implementation
@@ -88,7 +121,7 @@ Project complexity assessment: SIMPLIFIED
 - Focus on Sentry demo value
 - Clear implementation path
 
-**Current Status: Ready for Next Scenario**
+**Current Status: Implementing Scenario 4**
 
 ## Completed Scenarios
 1. **Scenario 1: Distributed Tracing** ✅ ARCHIVED
