@@ -1,0 +1,50 @@
+# PLAN Phase Definition - Task Planning
+
+phase_name: PLAN
+description: Create detailed implementation plans
+type: planning
+
+capabilities:
+  enabled:
+    - read_files
+    - analyze_code
+    - create_plans
+    - update_memory_bank
+    - identify_components
+  disabled:
+    - modify_code
+    - execute_code
+    - create_production_files
+
+entry_conditions:
+  - van_complete: true
+  - complexity_level: ">= 2"
+  - tasks_defined: true
+
+exit_conditions:
+  - implementation_plan_complete: true
+  - components_identified: true
+  - creative_phases_flagged: true
+  - technology_decisions_made: true
+
+next_phases:
+  - phase: CREATIVE
+    condition: "creative_components_exist"
+    description: "Design decisions needed"
+  - phase: IMPLEMENT
+    condition: "no_creative_needed"
+    description: "Ready to build"
+
+required_outputs:
+  - detailed_plan_in_tasks.md
+  - component_list
+  - creative_phase_flags
+  - technology_stack
+
+workflow:
+  1: "Review project requirements"
+  2: "Analyze affected components"
+  3: "Create implementation strategy"
+  4: "Identify creative phase needs"
+  5: "Document technology choices"
+  6: "Update tasks.md with plan"

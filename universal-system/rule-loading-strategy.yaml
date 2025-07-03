@@ -1,0 +1,149 @@
+# Rule Loading Strategy Configuration
+# Defines hierarchical loading patterns for universal rules
+
+version: 1.0
+description: Hierarchical rule loading strategy for token optimization
+
+# Initial rules loaded on system start
+initial_load:
+  core:
+    - core/base-rules
+    - core/memory-bank
+    - core/phase-management
+  essential:
+    - core/command-patterns
+    - core/error-handling
+
+# Phase-specific rule loading
+phase_rules:
+  van:
+    required:
+      - visual-maps/van-mode-map
+      - core/initialization
+      - core/complexity-assessment
+    optional:
+      - level1/quick-start
+      - utils/project-analysis
+    
+  plan:
+    required:
+      - visual-maps/plan-mode-map
+      - core/planning-principles
+    complexity_based:
+      2:
+        - level2/enhancement-planning
+        - level2/task-tracking-basic
+      3:
+        - level3/feature-planning
+        - level3/task-tracking-intermediate
+        - level3/planning-comprehensive
+      4:
+        - level4/system-planning
+        - level4/architectural-planning
+        - level4/phased-implementation
+    
+  creative:
+    required:
+      - visual-maps/creative-mode-map
+      - core/creative-principles
+      - core/design-patterns
+    type_based:
+      architecture:
+        - creative/architecture-patterns
+        - creative/system-design
+      algorithm:
+        - creative/algorithm-design
+        - creative/complexity-analysis
+      ui_ux:
+        - creative/ui-patterns
+        - creative/user-experience
+      data_model:
+        - creative/data-structures
+        - creative/relationships
+    
+  implement:
+    required:
+      - visual-maps/implement-mode-map
+      - core/implementation-principles
+      - core/command-execution
+    complexity_based:
+      1:
+        - level1/quick-fix-workflow
+      2:
+        - level2/enhancement-workflow
+      3:
+        - level3/feature-workflow
+        - level3/phased-build
+      4:
+        - level4/system-workflow
+        - level4/integration-patterns
+    
+  reflect:
+    required:
+      - visual-maps/reflect-mode-map
+      - core/reflection-principles
+      - core/lesson-capture
+    optional:
+      - templates/reflection-template
+      - utils/metrics-collection
+    
+  archive:
+    required:
+      - visual-maps/archive-mode-map
+      - core/documentation-principles
+      - templates/archive-template
+    optional:
+      - utils/diagram-generation
+      - utils/index-creation
+
+# Conditional loading rules
+conditional_loading:
+  - condition: "memory_bank_size > 100MB"
+    load:
+      - optimization/large-project-handling
+      - optimization/token-reduction
+  
+  - condition: "error_count > 5"
+    load:
+      - troubleshooting/common-errors
+      - troubleshooting/recovery-patterns
+  
+  - condition: "multi_language_project"
+    load:
+      - language/polyglot-patterns
+      - language/cross-language-integration
+
+# Caching strategies
+cache_config:
+  persistent:
+    - core/*
+    - visual-maps/*
+  session:
+    - level*/current-level
+    - creative/active-design
+  temporary:
+    - utils/*
+    - troubleshooting/*
+
+# Loading priorities
+priority_levels:
+  critical:
+    - core/base-rules
+    - core/memory-bank
+  high:
+    - visual-maps/current-phase
+    - level*/active-level
+  medium:
+    - templates/*
+    - utils/common
+  low:
+    - examples/*
+    - troubleshooting/rare
+
+# Performance optimizations
+optimizations:
+  lazy_loading: true
+  preload_next_phase: true
+  unload_previous_phase: true
+  cache_size_limit: "50MB"
+  compression: true

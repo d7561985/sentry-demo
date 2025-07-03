@@ -1,0 +1,50 @@
+# VAN Phase Definition - Initialization
+
+phase_name: VAN
+description: Project initialization and complexity assessment
+type: initialization
+
+capabilities:
+  enabled:
+    - read_files
+    - analyze_code
+    - create_directories
+    - update_memory_bank
+    - determine_complexity
+  disabled:
+    - modify_code
+    - execute_code
+    - delete_files
+
+entry_conditions:
+  - new_project: true
+  - or_condition:
+    - memory_bank_empty: true
+    - reset_requested: true
+
+exit_conditions:
+  - memory_bank_initialized: true
+  - complexity_determined: true
+  - project_structure_analyzed: true
+
+next_phases:
+  - phase: PLAN
+    condition: "complexity_level >= 2"
+    description: "Complex tasks require planning"
+  - phase: IMPLEMENT
+    condition: "complexity_level == 1"
+    description: "Simple fixes can proceed directly"
+
+required_outputs:
+  - tasks.md
+  - activeContext.md
+  - progress.md
+  - projectbrief.md
+
+workflow:
+  1: "Create memory-bank directory"
+  2: "Initialize core files"
+  3: "Analyze project structure"
+  4: "Determine complexity level"
+  5: "Document findings"
+  6: "Recommend next phase"

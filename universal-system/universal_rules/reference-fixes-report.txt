@@ -1,0 +1,34 @@
+Reference Fix Report
+===================
+
+Total files updated: 11
+Total references fixed: 37
+
+Unique path transformations:
+  - .cursor/rules/isolation_rules/Core/command-execution.mdc → core/command-execution.md
+  - .cursor/rules/visual-maps/level1-map.mdc → visual-maps/level1-map.md
+  - .cursor/rules/visual-maps/level2-map.mdc → visual-maps/level2-map.md
+  - .cursor/rules/visual-maps/level3-map.mdc → visual-maps/level3-map.md
+  - .cursor/rules/visual-maps/level4-map.mdc → visual-maps/level4-map.md
+  - Core/main-optimized.mdc → core/main-optimized.md
+  - Core/memory-bank-paths.mdc → core/memory-bank-paths.md
+  - Level3/archive-L3.mdc → level3/archive-l3.md
+  - Level3/implementation-L3.mdc → level3/implementation-l3.md
+  - Level3/planning-comprehensive.mdc → level3/planning-comprehensive.md
+  - Level3/reflection-L3.mdc → level3/reflection-l3.md
+  - Level3/task-tracking-intermediate.mdc → level3/task-tracking-intermediate.md
+  - Phases/CreativePhase/*.mdc → phases/creativephase/*.md
+  - optimized-creative-template.mdc → optimized-creative-template.md
+  - van-file-verification.mdc → van-file-verification.md
+  - van-qa-checks/build-test.mdc → van-qa-checks/build-test.md
+  - van-qa-checks/config-check.mdc → van-qa-checks/config-check.md
+  - van-qa-checks/dependency-check.mdc → van-qa-checks/dependency-check.md
+  - van-qa-checks/environment-check.mdc → van-qa-checks/environment-check.md
+  - van-qa-utils/common-fixes.mdc → van-qa-utils/common-fixes.md
+  - van-qa-utils/mode-transitions.mdc → van-qa-utils/mode-transitions.md
+  - van-qa-utils/reports.mdc → van-qa-utils/reports.md
+  - visual-maps/archive-mode-map.mdc → visual-maps/archive-mode-map.md
+  - visual-maps/creative-mode-map.mdc → visual-maps/creative-mode-map.md
+  - visual-maps/implement-mode-map.mdc → visual-maps/implement-mode-map.md
+  - visual-maps/plan-mode-map.mdc → visual-maps/plan-mode-map.md
+  - visual-maps/reflect-mode-map.mdc → visual-maps/reflect-mode-map.md

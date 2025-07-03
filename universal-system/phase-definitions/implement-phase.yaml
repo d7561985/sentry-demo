@@ -1,0 +1,62 @@
+# IMPLEMENT Phase Definition - Build
+
+phase_name: IMPLEMENT
+description: Build planned components following design decisions
+type: implementation
+
+capabilities:
+  enabled:
+    - read_files
+    - write_files
+    - modify_code
+    - execute_commands
+    - create_directories
+    - run_tests
+  disabled:
+    - delete_critical_files
+    - modify_system_configs
+
+entry_conditions:
+  - level_1:
+      van_complete: true
+  - level_2:
+      plan_complete: true
+  - level_3_4:
+      plan_complete: true
+      creative_complete: true
+
+exit_conditions:
+  - all_components_built: true
+  - tests_passing: true
+  - documentation_updated: true
+  - memory_bank_current: true
+
+next_phases:
+  - phase: REFLECT
+    condition: "implementation_complete"
+    description: "Review and learn"
+  - phase: CREATIVE
+    condition: "new_design_needed"
+    description: "Unexpected design decisions"
+
+required_outputs:
+  - implemented_code
+  - test_results
+  - updated_tasks.md
+  - build_documentation
+
+implementation_levels:
+  1: "Quick fixes - direct implementation"
+  2: "Enhancements - sequential build"
+  3: "Features - phased implementation"
+  4: "Systems - complex integration"
+
+workflow:
+  1: "Review plan and designs"
+  2: "Set up directory structure"
+  3: "Implement components:"
+  4: "  - Build incrementally"
+  5: "  - Test each component"
+  6: "  - Document changes"
+  7: "Integration testing"
+  8: "Update all documentation"

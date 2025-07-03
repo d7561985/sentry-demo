@@ -1,0 +1,57 @@
+# CREATIVE Phase Definition - Design Decisions
+
+phase_name: CREATIVE
+description: Explore design options and make architectural decisions
+type: design
+
+capabilities:
+  enabled:
+    - read_files
+    - analyze_patterns
+    - create_designs
+    - document_decisions
+    - explore_options
+  disabled:
+    - implement_code
+    - execute_commands
+    - modify_production_files
+
+entry_conditions:
+  - plan_complete: true
+  - creative_components_identified: true
+  - design_decisions_needed: true
+
+exit_conditions:
+  - all_components_designed: true
+  - decisions_documented: true
+  - implementation_guidelines_created: true
+
+next_phases:
+  - phase: IMPLEMENT
+    condition: "all_designs_complete"
+    description: "Ready to build"
+  - phase: PLAN
+    condition: "replanning_needed"
+    description: "Design revealed new requirements"
+
+required_outputs:
+  - creative-*.md files
+  - design_decisions
+  - implementation_guidelines
+  - architecture_diagrams
+
+creative_types:
+  - ui_ux: "User interface and experience design"
+  - architecture: "System architecture and structure"
+  - data_model: "Data structures and relationships"
+  - algorithm: "Algorithm design and optimization"
+
+workflow:
+  1: "Identify components needing design"
+  2: "For each component:"
+  3: "  - Define problem/requirements"
+  4: "  - Generate multiple options"
+  5: "  - Analyze pros/cons"
+  6: "  - Select and justify approach"
+  7: "  - Create implementation guide"
+  8: "Update tasks.md with decisions"
