@@ -1,29 +1,19 @@
+import { bootstrapApplication } from '@angular/platform-browser';
 import { enableProdMode } from '@angular/core';
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
 import * as Sentry from '@sentry/angular';
-import { BrowserTracing } from '@sentry/tracing';
 
-import { AppModule } from './app/app.module';
+import { AppComponent } from './app/app.component';
+import { appConfig } from './app.config';
 import { environment } from './environments/environment';
 
-// Initialize Sentry with Session Replay
+// Initialize Sentry SDK v9 with Session Replay
 Sentry.init({
   dsn: environment.sentryDsn,
   release: (environment as any).version || '1.0.0',
   integrations: [
-    new Sentry.BrowserTracing({
-      // CRITICAL: This must match your API gateway URL exactly
-      // It controls which outgoing requests get trace headers attached
-      tracingOrigins: ['localhost', 'http://localhost:8080', /^http:\/\/localhost:8080\/api\//],
-      routingInstrumentation: Sentry.routingInstrumentation,
-      // Auto-finish transactions after 3 seconds of inactivity
-      idleTimeout: 3000,
-      // Maximum transaction duration 30 seconds
-      finalTimeout: 30000,
-      // Don't create background transactions for every interaction
-      markBackgroundTransactions: false,
-    }),
-    new Sentry.Replay({
+    // BrowserTracing integration for Angular
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration({
       // Mask all text content for privacy (default)
       maskAllText: false, // For demo, show text
       // Block all media elements
@@ -32,12 +22,12 @@ Sentry.init({
       networkDetailAllowUrls: ['http://localhost:8080'],
       // Privacy settings for demo
       maskAllInputs: false, // Show input values in demo
-      // Maximum replay duration (5 minutes)
-      maxReplayDuration: 300000,
     }),
   ],
+  // Trace propagation configuration is now at the root level
+  tracePropagationTargets: ['localhost', 'http://localhost:8080', /^http:\/\/localhost:8080\/api\//],
   tracesSampleRate: 1.0,
-  // Session Replay sample rates
+  // Session Replay sample rates are now at root level
   replaysSessionSampleRate: 1.0, // 100% for demo
   replaysOnErrorSampleRate: 1.0, // 100% for errors
   environment: environment.production ? 'production' : 'development',
@@ -49,6 +39,5 @@ if (environment.production) {
   enableProdMode();
 }
 
-platformBrowserDynamic()
-  .bootstrapModule(AppModule)
+bootstrapApplication(AppComponent, appConfig)
   .catch(err => console.error(err));

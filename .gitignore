@@ -29,7 +29,6 @@ build/
 *.dylib
 *.test
 *.out
-go.sum
 
 # IDE
 .vscode/

@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { interval, Subscription } from 'rxjs';
 import * as Sentry from '@sentry/angular';
@@ -23,11 +24,13 @@ interface MetricData {
 }
 
 @Component({
-  selector: 'app-business-metrics',
-  template: `
+    selector: 'app-business-metrics',
+    standalone: true,
+    imports: [CommonModule],
+    template: `
     <div class="metrics-dashboard">
       <h2>📊 Business Metrics Dashboard</h2>
-      
+    
       <div class="metrics-grid">
         <!-- RTP Metric Card -->
         <div class="metric-card" [class.anomaly]="rtpData?.rtp_threshold?.status === 'anomaly'">
@@ -38,14 +41,14 @@ interface MetricData {
           </div>
           <div class="metric-range">Expected: {{ rtpData?.rtp_threshold?.min }}-{{ rtpData?.rtp_threshold?.max }}%</div>
         </div>
-
+    
         <!-- Session Metrics Card -->
         <div class="metric-card">
           <h3>Active Sessions</h3>
           <div class="metric-value">{{ sessionData?.active_sessions || 0 }}</div>
           <div class="metric-subtext">Avg Duration: {{ sessionData?.avg_duration?.toFixed(0) || 0 }}s</div>
         </div>
-
+    
         <!-- Financial Metrics Card -->
         <div class="metric-card">
           <h3>Financial Overview (24h)</h3>
@@ -62,7 +65,7 @@ interface MetricData {
             <span class="value">{{ financialData?.withdrawal_count || 0 }} ({{ '$' + (financialData?.avg_withdrawal?.toFixed(2) || '0.00') }} avg)</span>
           </div>
         </div>
-
+    
         <!-- Game Activity Card -->
         <div class="metric-card">
           <h3>Game Activity</h3>
@@ -71,18 +74,20 @@ interface MetricData {
           <div class="metric-subtext">{{ rtpData?.unique_players || 0 }} unique players</div>
         </div>
       </div>
-
+    
       <div class="refresh-info">
         Auto-refreshing every 10 seconds
         <span class="status" [class.error]="hasError">{{ hasError ? '❌ Error' : '🟢 Connected' }}</span>
       </div>
-
-      <div class="error-message" *ngIf="errorMessage">
-        {{ errorMessage }}
-      </div>
+    
+      @if (errorMessage) {
+        <div class="error-message">
+          {{ errorMessage }}
+        </div>
+      }
     </div>
-  `,
-  styles: [`
+    `,
+    styles: [`
     .metrics-dashboard {
       padding: 20px;
       max-width: 1200px;
@@ -215,28 +220,29 @@ export class BusinessMetricsComponent implements OnInit, OnDestroy {
   }
 
   private loadMetrics(): void {
-    const transaction = Sentry.startTransaction({
-      name: 'business-metrics-refresh',
-      op: 'http'
-    });
+    Sentry.startSpan(
+      {
+        name: 'business-metrics-refresh',
+        op: 'http'
+      },
+      () => {
+        // Load RTP metrics
+        this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/rtp?hours=1`)
+          .subscribe({
+            next: (data) => {
+              this.rtpData = data;
+              this.hasError = false;
+            },
+            error: (err) => {
+              this.handleError('Failed to load RTP metrics', err);
+            }
+          });
 
-    // Load RTP metrics
-    this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/rtp?hours=1`)
-      .subscribe({
-        next: (data) => {
-          this.rtpData = data;
-          this.hasError = false;
-        },
-        error: (err) => {
-          this.handleError('Failed to load RTP metrics', err);
-        }
-      });
-
-    // Load session metrics
-    this.http.get<any>(`${this.analyticsUrl}/api/v1/business-metrics/sessions`)
-      .subscribe({
-        next: (data) => {
-          this.sessionData = data;
+        // Load session metrics
+        this.http.get<any>(`${this.analyticsUrl}/api/v1/business-metrics/sessions`)
+          .subscribe({
+            next: (data) => {
+              this.sessionData = data;
         },
         error: (err) => {
           this.handleError('Failed to load session metrics', err);
@@ -251,10 +257,10 @@ export class BusinessMetricsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.handleError('Failed to load financial metrics', err);
-        }
-      });
-
-    transaction.finish();
+          }
+        });
+      }
+    );
   }
 
   private handleError(message: string, error: any): void {

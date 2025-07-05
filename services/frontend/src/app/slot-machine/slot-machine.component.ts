@@ -1,105 +1,141 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import * as Sentry from '@sentry/angular';
 import { GameService } from '../services/game.service';
+import { GameStateService } from '../services/game-state.service';
 
 @Component({
-  selector: 'app-slot-machine',
-  template: `
+    selector: 'app-slot-machine',
+    standalone: true,
+    imports: [CommonModule],
+    template: `
     <div class="slot-machine">
       <h2>🎰 Simple Slot Machine</h2>
-      
+    
       <div class="balance">
-        Balance: $<span>{{balance}}</span>
+        Balance: $<span>{{balance()}}</span>
       </div>
-
-      <!-- 3 Reels in a Row -->
-      <div class="slots-container">
-        <div class="slot-window" *ngFor="let reel of reels; let i = index">
-          <div class="reel" [class.spinning]="isSpinning">
-            <div class="symbol-strip" *ngIf="isSpinning">
-              <div class="symbol" *ngFor="let symbol of spinningSymbols">{{ symbol }}</div>
-              <!-- Duplicate symbols for seamless loop -->
-              <div class="symbol" *ngFor="let symbol of spinningSymbols">{{ symbol }}</div>
-            </div>
-            <div class="symbol static" *ngIf="!isSpinning">{{ reel }}</div>
+      
+      <!-- Statistics Panel -->
+      @if (totalSpins() > 0) {
+        <div class="stats-panel">
+          <div class="stat">
+            <span class="stat-label">Total Spins:</span>
+            <span class="stat-value">{{totalSpins()}}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Win Rate:</span>
+            <span class="stat-value">{{winRate().toFixed(1)}}%</span>
           </div>
         </div>
+      }
+    
+      <!-- 3 Reels in a Row -->
+      <div class="slots-container">
+        @for (reel of reels; track reel; let i = $index) {
+          <div class="slot-window">
+            <div class="reel" [class.spinning]="isSpinning()">
+              @if (isSpinning()) {
+                <div class="symbol-strip">
+                  @for (symbol of spinningSymbols; track symbol) {
+                    <div class="symbol">{{ symbol }}</div>
+                  }
+                  <!-- Duplicate symbols for seamless loop -->
+                  @for (symbol of spinningSymbols; track symbol) {
+                    <div class="symbol">{{ symbol }}</div>
+                  }
+                </div>
+              }
+              @if (!isSpinning()) {
+                <div class="symbol static">{{ reel }}</div>
+              }
+            </div>
+          </div>
+        }
       </div>
-      
-      <button 
-        class="spin-button" 
+    
+      <button
+        class="spin-button"
         (click)="spin()"
-        [disabled]="isSpinning || balance < 10">
-        {{ isSpinning ? 'Spinning...' : 'SPIN ($10)' }}
+        [disabled]="isSpinning() || balance() < 10">
+        {{ isSpinning() ? 'Spinning...' : 'SPIN ($10)' }}
       </button>
-      
-      <div class="result" *ngIf="lastResult && !isSpinning">
-        <div *ngIf="lastResult.win" class="win">
-          🎉 You won $<span>{{lastResult.payout}}</span>!
+    
+      @if (lastResult() && !isSpinning()) {
+        <div class="result">
+          @if (lastResult()!.win) {
+            <div class="win">
+              🎉 You won $<span>{{lastResult()!.payout}}</span>!
+            </div>
+          }
+          @if (!lastResult()!.win) {
+            <div class="lose">
+              Better luck next time!
+            </div>
+          }
         </div>
-        <div *ngIf="!lastResult.win" class="lose">
-          Better luck next time!
+      }
+    
+      @if (error) {
+        <div class="error">
+          ❌ Error: {{ error }}
         </div>
-      </div>
-      
-      <div class="error" *ngIf="error">
-        ❌ Error: {{ error }}
-      </div>
-      
+      }
+    
       <div style="margin-top: 40px; opacity: 0.7;">
         <small>User ID: {{ userId }}</small>
       </div>
-      
+    
       <!-- Debug Panel for Error Scenarios -->
       <div class="debug-panel">
         <button class="debug-toggle" (click)="debugPanelOpen = !debugPanelOpen">
           🐛 {{ debugPanelOpen ? 'Hide' : 'Show' }} Debug Panel
         </button>
-        
-        <div class="debug-content" *ngIf="debugPanelOpen">
-          <h3>Error Scenario Triggers</h3>
-          
-          <div class="debug-section">
-            <h4>Frontend Errors</h4>
-            <button class="debug-button" (click)="triggerPromiseRejection()">
-              💥 Trigger Promise Rejection
-            </button>
-            <button class="debug-button" (click)="triggerComponentError()">
-              🔥 Trigger Component Error
-            </button>
+    
+        @if (debugPanelOpen) {
+          <div class="debug-content">
+            <h3>Error Scenario Triggers</h3>
+            <div class="debug-section">
+              <h4>Frontend Errors</h4>
+              <button class="debug-button" (click)="triggerPromiseRejection()">
+                💥 Trigger Promise Rejection
+              </button>
+              <button class="debug-button" (click)="triggerComponentError()">
+                🔥 Trigger Component Error
+              </button>
+            </div>
+            <div class="debug-section">
+              <h4>Backend Errors</h4>
+              <button class="debug-button" (click)="triggerGatewayPanic()">
+                ⚠️ Trigger Gateway Panic
+              </button>
+              <button class="debug-button" (click)="triggerAuthError()">
+                🔒 Trigger 401 Auth Error
+              </button>
+            </div>
+            <div class="debug-section">
+              <h4>Performance Issues</h4>
+              <button class="debug-button" (click)="triggerN1Query()">
+                🐌 Trigger N+1 Query
+              </button>
+              <button class="debug-button" (click)="triggerCPUSpike()">
+                🔥 Trigger CPU Spike
+              </button>
+              <button class="debug-button" (click)="triggerSlowAggregation()">
+                📊 Trigger Slow Analytics
+              </button>
+            </div>
+            @if (debugStatus) {
+              <div class="debug-status">
+                Status: {{ debugStatus }}
+              </div>
+            }
           </div>
-          
-          <div class="debug-section">
-            <h4>Backend Errors</h4>
-            <button class="debug-button" (click)="triggerGatewayPanic()">
-              ⚠️ Trigger Gateway Panic
-            </button>
-            <button class="debug-button" (click)="triggerAuthError()">
-              🔒 Trigger 401 Auth Error
-            </button>
-          </div>
-          
-          <div class="debug-section">
-            <h4>Performance Issues</h4>
-            <button class="debug-button" (click)="triggerN1Query()">
-              🐌 Trigger N+1 Query
-            </button>
-            <button class="debug-button" (click)="triggerCPUSpike()">
-              🔥 Trigger CPU Spike
-            </button>
-            <button class="debug-button" (click)="triggerSlowAggregation()">
-              📊 Trigger Slow Analytics
-            </button>
-          </div>
-          
-          <div class="debug-status" *ngIf="debugStatus">
-            Status: {{ debugStatus }}
-          </div>
-        </div>
+        }
       </div>
     </div>
-  `,
-  styles: [`
+    `,
+    styles: [`
     .slot-machine {
       text-align: center;
       padding: 20px;
@@ -308,9 +344,7 @@ import { GameService } from '../services/game.service';
   `]
 })
 export class SlotMachineComponent implements OnInit {
-  balance = 1000;
-  isSpinning = false;
-  lastResult: any = null;
+  // Component state
   error: string | null = null;
   userId = 'demo-user-' + Math.floor(Math.random() * 1000);
   reels: string[] = ['🍒', '🍋', '🍊'];
@@ -319,8 +353,18 @@ export class SlotMachineComponent implements OnInit {
   // Debug panel properties
   debugPanelOpen = false;
   debugStatus: string | null = null;
+  
+  // Signals from state service
+  balance = this.gameState.balance;
+  isSpinning = this.gameState.isSpinning;
+  lastResult = this.gameState.lastResult;
+  winRate = this.gameState.winRate;
+  totalSpins = this.gameState.totalSpins;
 
-  constructor(private gameService: GameService) {}
+  constructor(
+    private gameService: GameService,
+    private gameState: GameStateService
+  ) {}
   
   get apiUrl(): string {
     return (this.gameService as any).apiUrl;
@@ -335,60 +379,55 @@ export class SlotMachineComponent implements OnInit {
   }
 
   async spin(): Promise<void> {
-    this.isSpinning = true;
     this.error = null;
     
-    // IMPORTANT: Finish any existing transaction to avoid span accumulation
-    const existingTransaction = Sentry.getCurrentHub().getScope().getTransaction();
-    if (existingTransaction) {
-      existingTransaction.finish();
-    }
+    // Start a NEW span for the spin action using v8 API
+    await Sentry.startSpan(
+      {
+        name: 'slot-machine-spin',
+        op: 'user-action'
+      },
+      async (span) => {
     
-    // Start a NEW transaction for the spin action
-    const transaction = Sentry.startTransaction({
-      name: 'slot-machine-spin',
-      op: 'user-action'
-    });
-    
-    // Set as active transaction
-    Sentry.getCurrentScope().setSpan(transaction);
-    
-    try {
-      const result = await this.gameService.spin(this.userId, 10).toPromise();
-      if (result) {
-        // Add custom context
-        transaction.setTag('win', result.win);
-        transaction.setTag('payout', result.payout);
+        try {
+          const result = await this.gameService.spin(this.userId, 10).toPromise();
+          if (result) {
+            // Add custom context
+            span?.setAttribute('win', result.win);
+            span?.setAttribute('payout', result.payout);
         
-        // Wait for animation to complete before closing transaction
-        await new Promise<void>(resolve => {
-          setTimeout(() => {
-            this.lastResult = result;
-            this.balance = result.newBalance;
-            // Show the result symbols (use first 3 or repeat if less)
-            if (result.symbols && result.symbols.length > 0) {
-              this.reels = [
-                result.symbols[0] || '🍒',
-                result.symbols[1] || result.symbols[0] || '🍒',
-                result.symbols[2] || result.symbols[0] || '🍒'
-              ];
-            }
-            this.isSpinning = false;
-            resolve();
-          }, 2000);
-        });
-        
-        transaction.setStatus('ok');
+            // Wait for animation to complete
+            await new Promise<void>(resolve => {
+              setTimeout(() => {
+                // Update state through service
+                this.gameState.completeSpin({
+                  win: result.win,
+                  payout: result.payout,
+                  symbols: result.symbols || [],
+                  winAmount: result.payout,
+                  betAmount: 10,
+                  newBalance: result.newBalance
+                });
+                // Show the result symbols (use first 3 or repeat if less)
+                if (result.symbols && result.symbols.length > 0) {
+                  this.reels = [
+                    result.symbols[0] || '🍒',
+                    result.symbols[1] || result.symbols[0] || '🍒',
+                    result.symbols[2] || result.symbols[0] || '🍒'
+                  ];
+                }
+                resolve();
+              }, 2000);
+            });
+          }
+        } catch (error: any) {
+          this.error = error.message || 'Something went wrong!';
+          // In v8, error status is automatically set when exception is thrown
+          Sentry.captureException(error);
+          throw error; // Re-throw to let Sentry handle span status
+        }
       }
-    } catch (error: any) {
-      this.error = error.message || 'Something went wrong!';
-      this.isSpinning = false;
-      transaction.setStatus('internal_error');
-      Sentry.captureException(error);
-    } finally {
-      // Close transaction after everything is done
-      transaction.finish();
-    }
+    );
   }
   
   // Debug Panel Methods for Error Scenarios
@@ -460,12 +499,13 @@ export class SlotMachineComponent implements OnInit {
   async triggerN1Query(): Promise<void> {
     this.debugStatus = 'Triggering N+1 query problem...';
     
-    const transaction = Sentry.startTransaction({
-      name: 'debug-n1-query',
-      op: 'http'
-    });
-    
-    try {
+    await Sentry.startSpan(
+      {
+        name: 'debug-n1-query',
+        op: 'http'
+      },
+      async () => {
+        try {
       const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
         method: 'GET'
       });
@@ -476,23 +516,24 @@ export class SlotMachineComponent implements OnInit {
       } else {
         this.debugStatus = `Failed to trigger N+1: ${response.status}`;
       }
-    } catch (error) {
-      this.debugStatus = 'Error triggering N+1 query';
-      Sentry.captureException(error);
-    } finally {
-      transaction.finish();
-    }
+        } catch (error) {
+          this.debugStatus = 'Error triggering N+1 query';
+          Sentry.captureException(error);
+        }
+      }
+    );
   }
   
   async triggerCPUSpike(): Promise<void> {
     this.debugStatus = 'Triggering CPU spike in game engine...';
     
-    const transaction = Sentry.startTransaction({
-      name: 'debug-cpu-spike',
-      op: 'http'
-    });
-    
-    try {
+    await Sentry.startSpan(
+      {
+        name: 'debug-cpu-spike',
+        op: 'http'
+      },
+      async () => {
+        try {
       // Make a spin request with cpu_intensive flag
       const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
         method: 'POST',
@@ -511,23 +552,24 @@ export class SlotMachineComponent implements OnInit {
       } else {
         this.debugStatus = `Failed to trigger CPU spike: ${response.status}`;
       }
-    } catch (error) {
-      this.debugStatus = 'Error triggering CPU spike';
-      Sentry.captureException(error);
-    } finally {
-      transaction.finish();
-    }
+        } catch (error) {
+          this.debugStatus = 'Error triggering CPU spike';
+          Sentry.captureException(error);
+        }
+      }
+    );
   }
   
   async triggerSlowAggregation(): Promise<void> {
     this.debugStatus = 'Triggering slow MongoDB aggregation...';
     
-    const transaction = Sentry.startTransaction({
-      name: 'debug-slow-aggregation',
-      op: 'http'
-    });
-    
-    try {
+    await Sentry.startSpan(
+      {
+        name: 'debug-slow-aggregation',
+        op: 'http'
+      },
+      async () => {
+        try {
       // Call analytics service for daily stats
       const response = await fetch(`http://localhost:8084/api/v1/analytics/daily-stats?days=30`, {
         method: 'GET'
@@ -539,11 +581,11 @@ export class SlotMachineComponent implements OnInit {
       } else {
         this.debugStatus = `Failed to trigger aggregation: ${response.status}`;
       }
-    } catch (error) {
-      this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
-      Sentry.captureException(error);
-    } finally {
-      transaction.finish();
-    }
+        } catch (error) {
+          this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
+          Sentry.captureException(error);
+        }
+      }
+    );
   }
 }

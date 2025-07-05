@@ -13,26 +13,25 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "^13.3.0",
-    "@angular/common": "^13.3.0",
-    "@angular/compiler": "^13.3.0",
-    "@angular/core": "^13.3.0",
-    "@angular/forms": "^13.3.0",
-    "@angular/platform-browser": "^13.3.0",
-    "@angular/platform-browser-dynamic": "^13.3.0",
-    "@angular/router": "^13.3.0",
-    "@sentry/angular": "^7.27.0",
-    "@sentry/tracing": "^7.27.0",
+    "@angular/animations": "^20.0.6",
+    "@angular/common": "^20.0.6",
+    "@angular/compiler": "^20.0.6",
+    "@angular/core": "^20.0.6",
+    "@angular/forms": "^20.0.6",
+    "@angular/platform-browser": "^20.0.6",
+    "@angular/platform-browser-dynamic": "^20.0.6",
+    "@angular/router": "^20.0.6",
+    "@sentry/angular": "^9.35.0",
     "@sentry/cli": "^2.20.0",
     "rxjs": "~7.5.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.11.4"
+    "zone.js": "~0.15.1"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^13.3.0",
-    "@angular/cli": "~13.3.0",
-    "@angular/compiler-cli": "^13.3.0",
+    "@angular-devkit/build-angular": "^20.0.5",
+    "@angular/cli": "^20.0.5",
+    "@angular/compiler-cli": "^20.0.6",
     "@types/node": "^12.11.1",
-    "typescript": "~4.6.2"
+    "typescript": "~5.8.3"
   }
 }
