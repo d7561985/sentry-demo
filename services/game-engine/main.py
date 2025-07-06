@@ -15,6 +15,9 @@ from metrics import BusinessMetrics, MetricAnomalyDetector
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Get version from environment or use default
+version = os.environ.get('APP_VERSION', '1.0.0')
+
 # Initialize Sentry
 sentry_sdk.init(
     dsn=os.environ.get('SENTRY_DSN'),
@@ -27,7 +30,8 @@ sentry_sdk.init(
     # Set profile_lifecycle to "trace" to automatically
     # run the profiler on when there is an active transaction
     #profile_lifecycle="trace",
-    debug=True
+    debug=True,
+    release=f"game-engine@{version}"
 )
 
 # MongoDB connection

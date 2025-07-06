@@ -18,6 +18,12 @@ import (
 )
 
 func main() {
+	// Get version from environment or use default
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "1.0.0"
+	}
+
 	// Initialize Sentry
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn:              os.Getenv("SENTRY_DSN"),
@@ -25,6 +31,7 @@ func main() {
 		TracesSampleRate: 1.0,
 		Environment:      "development",
 		Debug:            true,
+		Release:          "user-service@" + version,
 	})
 	if err != nil {
 		log.Fatalf("sentry.Init: %s", err)

@@ -1,6 +1,9 @@
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require("@sentry/profiling-node");
 
+// Get version from environment or use default
+const version = process.env.APP_VERSION || '1.0.0';
+
 // Initialize Sentry BEFORE any other imports
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -20,6 +23,7 @@ Sentry.init({
   profileLifetime: 300,
   environment: 'production',
   debug: true,
+  release: `payment-service@${version}`,
 });
 
 module.exports = Sentry;

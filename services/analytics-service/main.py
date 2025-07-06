@@ -18,6 +18,9 @@ from metrics import BusinessMetrics, MetricAnomalyDetector
 
 logging.basicConfig(level=logging.INFO)
 
+# Get version from environment or use default
+version = os.environ.get('APP_VERSION', '1.0.0')
+
 # Initialize Sentry
 sentry_sdk.init(
     dsn=os.environ.get('SENTRY_DSN'),
@@ -36,6 +39,7 @@ sentry_sdk.init(
     profile_lifecycle="trace",
     environment="development",
     debug=True,
+    release=f"analytics-service@{version}"
 )
 
 # MongoDB connection
