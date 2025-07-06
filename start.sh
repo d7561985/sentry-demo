@@ -16,6 +16,10 @@ if grep -q "YOUR_KEY" .env; then
     exit 1
 fi
 
+# Load environment variables
+echo "📋 Loading environment variables from .env..."
+export $(cat .env | grep -v '^#' | xargs)
+
 echo "🚀 Starting Sentry POC services..."
 
 # Start services

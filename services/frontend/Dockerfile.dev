@@ -9,6 +9,9 @@ RUN npm install
 # Copy all source files
 COPY . .
 
+# Make build-dev.sh executable
+RUN chmod +x build-dev.sh
+
 # Expose port
 EXPOSE 4200
 

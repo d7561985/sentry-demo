@@ -1,4 +1,4 @@
-FROM node:14-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Build arguments
 ARG SENTRY_DSN

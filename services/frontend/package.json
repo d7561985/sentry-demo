@@ -7,11 +7,17 @@
     "build": "ng build --configuration production",
     "build:dev": "ng build --configuration development",
     "build:prod": "ng build --configuration production && npm run sentry:sourcemaps",
+    "build:upload": "npm run build:prod",
     "sentry:sourcemaps": "./upload-sourcemaps.sh",
+    "sentry:inject": "sentry-cli sourcemaps inject ./dist/frontend",
     "test": "ng test",
     "lint": "ng lint"
   },
   "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "dependencies": {
     "@angular/animations": "^20.0.6",
     "@angular/common": "^20.0.6",

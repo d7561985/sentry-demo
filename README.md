@@ -25,7 +25,19 @@
    - Перейдите в Settings → Client Keys (DSN)
    - Скопируйте DSN (формат: `https://xxxxx@o123456.ingest.sentry.io/1234567`)
 
-4. **Настройте окружение**:
+4. **Создайте Auth Token для загрузки Source Maps** (только для Frontend):
+   - Перейдите на https://sentry.io/settings/account/api/auth-tokens/
+   - Нажмите "Create New Token"
+   - Назовите токен (например, "Source Maps Upload")
+   - Выберите права доступа (ОБЯЗАТЕЛЬНО все три!):
+     - `org:read` - для чтения информации об организации
+     - `project:read` - для чтения информации о проекте
+     - `project:write` - для загрузки source maps
+   - Сохраните токен для использования в frontend/.env
+
+5. **Настройте окружение**:
+   
+   **Основной .env файл (обязательно)**:
    ```bash
    cp .env.example .env
    ```
@@ -39,19 +51,38 @@
    SENTRY_PAYMENT_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234571
    SENTRY_ANALYTICS_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234572
    ```
+   
+   **Frontend .env файл (для source maps)**:
+   ```bash
+   cd services/frontend
+   cp .env.example .env
+   ```
+   
+   Откройте `services/frontend/.env` и добавьте:
+   ```
+   SENTRY_ORG=your-org-slug
+   SENTRY_PROJECT=your-project-slug
+   SENTRY_AUTH_TOKEN=your-auth-token
+   ```
+   
+   **Проверка конфигурации**:
+   ```bash
+   ./check-env.sh
+   ```
 
 ### 2. Запуск сервисов
 
-#### Production Mode (с оптимизацией)
+#### Production Mode (с оптимизацией и загрузкой source maps)
 ```bash
 # Запустите все сервисы в production режиме
-./start.sh
+# Source maps будут автоматически загружены в Sentry
+./start-prod.sh
 
-# Или вручную через docker-compose
-docker-compose up -d
+# Или базовый запуск без загрузки source maps
+./start.sh
 ```
 
-#### Development Mode (с отладкой и source maps)
+#### Development Mode (с отладкой, без загрузки source maps)
 ```bash
 # Запустите в dev режиме с hot reload
 ./start-dev.sh
@@ -61,8 +92,8 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 **Различия между режимами**:
-- **Production**: Оптимизированная сборка, source maps доступны только с DevTools
-- **Development**: Hot reload, полная отладка, debug логи включены
+- **Production**: Оптимизированная сборка, source maps с debug-ids загружаются в Sentry
+- **Development**: Hot reload, полная отладка, debug логи включены, source maps НЕ загружаются
 
 Дождитесь запуска всех сервисов (около 30 секунд).
 
@@ -445,3 +476,9 @@ const replayConfig = {
   errorSampleRate: 1.0,     // 100% сессий с ошибками
 };
 ```
+
+
+# ToDo
+
+* мне не нравится что каждый клик на фронте трейст создает это нужно оптимизировать!
+* как работают аномалии
