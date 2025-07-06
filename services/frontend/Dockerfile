@@ -27,6 +27,10 @@ RUN node scripts/generate-env.js
 # Build the app
 RUN npm run build
 
+# Install Sentry CLI and inject debug-ids into built files
+RUN npm install -g @sentry/cli
+RUN npx @sentry/cli sourcemaps inject ./dist/frontend/browser || echo "Debug ID injection skipped"
+
 # Production stage
 FROM nginx:alpine
 

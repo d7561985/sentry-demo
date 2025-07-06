@@ -33,32 +33,8 @@ if [ -z "$SENTRY_AUTH_TOKEN" ]; then
     echo ""
 fi
 
-# Generate environment files with new version
-echo "📝 Generating environment files with version $CURRENT_VERSION..."
-cd services/frontend
-APP_VERSION=$CURRENT_VERSION node scripts/generate-env.js
-
-# Check if frontend has its own .env file
-if [ -f .env ]; then
-    echo "📋 Loading frontend-specific environment variables..."
-    export $(cat .env | grep -v '^#' | xargs)
-fi
-
-# Build and upload source maps if token is available
-if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-    echo "🔨 Building production version with source map upload..."
-    echo "   Using SENTRY_ORG: ${SENTRY_ORG:-not set}"
-    echo "   Using SENTRY_PROJECT: ${SENTRY_PROJECT:-not set}"
-    echo "   Using APP_VERSION: $CURRENT_VERSION"
-    echo "   Sentry CLI version: $(npx @sentry/cli --version 2>/dev/null || echo 'not installed')"
-    export APP_VERSION=$CURRENT_VERSION
-    npm run build:upload
-else
-    echo "🔨 Building production version without source map upload..."
-    npm run build:dev
-fi
-
-cd ../..
+# No need to generate environment files here - Docker will do it
+echo "📝 Version $CURRENT_VERSION will be used for Docker build..."
 
 # Export version for docker-compose
 export APP_VERSION=$CURRENT_VERSION
@@ -74,6 +50,14 @@ sleep 10
 echo ""
 echo "✅ Services are running in production mode!"
 echo ""
+
+# Upload source maps from the running container if token is available
+if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+    echo "📤 Uploading source maps from deployed container..."
+    ./upload-sourcemaps-from-docker.sh
+    echo ""
+fi
+
 echo "📊 Access points:"
 echo "  - Frontend: http://localhost:4200"
 echo "  - API Gateway: http://localhost:8080"
