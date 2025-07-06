@@ -172,12 +172,46 @@ class CalculateHandler(web.RequestHandler):
                 self.write({"error": str(e)})
     
     def _calculate_slot_result_normal(self):
-        """Normal efficient slot calculation"""
+        """Normal slot calculation with 90% RTP"""
         symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎']
-        result_symbols = [random.choice(symbols) for _ in range(3)]
         
-        # Check if win (all symbols match)
-        win = all(s == result_symbols[0] for s in result_symbols)
+        # Symbol weights for 90% RTP
+        # Higher weight = more frequent appearance
+        symbol_weights = {
+            '🍒': 30,  # 2x multiplier - most frequent
+            '🍋': 25,  # 3x multiplier
+            '🍊': 20,  # 4x multiplier
+            '🍇': 15,  # 5x multiplier
+            '⭐': 8,   # 10x multiplier
+            '💎': 2    # 20x multiplier - rarest
+        }
+        
+        # Create weighted symbol list
+        weighted_symbols = []
+        for symbol, weight in symbol_weights.items():
+            weighted_symbols.extend([symbol] * weight)
+        
+        # 90% RTP calculation:
+        # Win probability should be ~30% to achieve 90% RTP with average multiplier of 3x
+        # 30% win * 3x average multiplier = 90% RTP
+        
+        # Determine if this spin wins (30% chance)
+        is_winning_spin = random.random() < 0.30
+        
+        if is_winning_spin:
+            # For winning spins, select one symbol for all reels
+            winning_symbol = random.choice(weighted_symbols)
+            result_symbols = [winning_symbol, winning_symbol, winning_symbol]
+            win = True
+        else:
+            # For losing spins, ensure at least one symbol is different
+            result_symbols = [random.choice(weighted_symbols) for _ in range(3)]
+            # Force a mismatch if accidentally all match
+            if result_symbols[0] == result_symbols[1] == result_symbols[2]:
+                # Change the middle symbol
+                other_symbols = [s for s in symbols if s != result_symbols[0]]
+                result_symbols[1] = random.choice(other_symbols)
+            win = False
         
         # Calculate multiplier based on symbol
         multipliers = {
@@ -207,7 +241,7 @@ class CalculateHandler(web.RequestHandler):
         return True
     
     def _calculate_slot_result_cpu_intensive(self):
-        """CPU-intensive calculation using prime number generation"""
+        """CPU-intensive calculation with 90% RTP using prime number generation"""
         with start_span(op="cpu.prime_generation", description="Generate large primes") as span:
             # Generate large prime numbers (VERY inefficient on purpose)
             primes = []
@@ -219,25 +253,63 @@ class CalculateHandler(web.RequestHandler):
             span.set_data("primes_generated", primes)
         
         with start_span(op="cpu.heavy_calculation", description="Heavy math operations") as span:
-            # Use primes for complex calculations
+            # Symbol weights for 90% RTP
+            symbol_weights = {
+                '🍒': 30,  # 2x multiplier - most frequent
+                '🍋': 25,  # 3x multiplier
+                '🍊': 20,  # 4x multiplier
+                '🍇': 15,  # 5x multiplier
+                '⭐': 8,   # 10x multiplier
+                '💎': 2    # 20x multiplier - rarest
+            }
+            
+            # Create weighted symbol list
             symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎']
-            result_symbols = []
+            weighted_symbols = []
+            for symbol, weight in symbol_weights.items():
+                weighted_symbols.extend([symbol] * weight)
             
+            # Do heavy calculations to determine win (30% chance for 90% RTP)
+            heavy_calc_sum = 0
             for prime in primes:
-                # More CPU-intensive operations
-                heavy_calc = 0
+                # CPU-intensive operations
                 for i in range(10000):
-                    heavy_calc += np.sin(prime * i) * np.cos(prime / (i + 1))
-                    heavy_calc += np.log(abs(heavy_calc) + 1)
-                
-                # Select symbol based on calculation
-                symbol_index = int(abs(heavy_calc) % len(symbols))
-                result_symbols.append(symbols[symbol_index])
+                    heavy_calc_sum += np.sin(prime * i) * np.cos(prime / (i + 1))
+                    heavy_calc_sum += np.log(abs(heavy_calc_sum) + 1)
             
-            span.set_data("calculation_iterations", len(primes) * 10000)
-        
-        # Check if win (all symbols match)
-        win = all(s == result_symbols[0] for s in result_symbols)
+            # Use the heavy calculation to determine if this is a winning spin
+            # Normalize to 0-1 range and check if < 0.30 for 30% win rate
+            win_threshold = abs(heavy_calc_sum) % 100 / 100.0
+            is_winning_spin = win_threshold < 0.30
+            
+            if is_winning_spin:
+                # For winning spins, select one symbol for all reels
+                # Use prime-based calculation to select symbol
+                symbol_selector = int(abs(heavy_calc_sum * primes[0]) % len(weighted_symbols))
+                winning_symbol = weighted_symbols[symbol_selector]
+                result_symbols = [winning_symbol, winning_symbol, winning_symbol]
+                win = True
+            else:
+                # For losing spins, use different calculations for each reel
+                result_symbols = []
+                for i, prime in enumerate(primes):
+                    # More CPU work for each symbol
+                    reel_calc = 0
+                    for j in range(5000):
+                        reel_calc += np.sin(prime * j * (i + 1))
+                        reel_calc += np.cos(prime / (j + 1))
+                    
+                    symbol_index = int(abs(reel_calc) % len(weighted_symbols))
+                    result_symbols.append(weighted_symbols[symbol_index])
+                
+                # Ensure at least one symbol is different
+                if result_symbols[0] == result_symbols[1] == result_symbols[2]:
+                    other_symbols = [s for s in symbols if s != result_symbols[0]]
+                    result_symbols[1] = random.choice(other_symbols)
+                win = False
+            
+            span.set_data("calculation_iterations", len(primes) * 15000)
+            span.set_data("win_threshold", win_threshold)
         
         # Calculate multiplier based on symbol
         multipliers = {
