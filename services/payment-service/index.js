@@ -59,8 +59,8 @@ app.post('/process', async (req, res) => {
         }
       },
       async () => {
-        // INTENTIONAL SLOW EXTERNAL API for demo (2-5 seconds)
-        const apiDelay = Math.random() * 1000;
+        // INTENTIONAL SLOW EXTERNAL API for demo 100ms
+        const apiDelay = Math.random() * 100;
         await new Promise(resolve => setTimeout(resolve, apiDelay));
         return apiDelay;
       }
