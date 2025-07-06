@@ -795,7 +795,6 @@ export class SlotMachineComponent implements OnInit {
           if (service === 'game-engine') {
             url = `${this.apiUrl}/api/v1/game-engine/debug/crash`;
           } else {
-            // Analytics endpoints are already under /api/, so we use the direct proxy
             url = `${this.apiUrl}/api/v1/analytics/debug/crash`;
           }
           

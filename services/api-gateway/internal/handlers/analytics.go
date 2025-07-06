@@ -21,7 +21,18 @@ func ProxyToAnalytics(cfg *config.Config) gin.HandlerFunc {
 		fullPath := c.Request.URL.Path
 		// Extract the path after /api/v1/ to forward to analytics service
 		pathAfterV1 := strings.TrimPrefix(fullPath, "/api/v1/")
-		analyticsURL := fmt.Sprintf("http://analytics-service:8084/api/v1/%s", pathAfterV1)
+		
+		// Analytics service has some endpoints under /api/v1/ and some under /api/
+		// Check if this is a debug endpoint
+		var analyticsURL string
+		if strings.HasPrefix(pathAfterV1, "analytics/debug/") {
+			// Debug endpoints are under /api/debug/
+			debugPath := strings.TrimPrefix(pathAfterV1, "analytics/")
+			analyticsURL = fmt.Sprintf("http://analytics-service:8084/api/%s", debugPath)
+		} else {
+			// Regular endpoints are under /api/v1/
+			analyticsURL = fmt.Sprintf("http://analytics-service:8084/api/v1/%s", pathAfterV1)
+		}
 		
 		// Add query parameters if any
 		if c.Request.URL.RawQuery != "" {
