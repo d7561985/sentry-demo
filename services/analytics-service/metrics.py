@@ -61,16 +61,42 @@ class BusinessMetrics:
     
     @staticmethod
     def start_business_transaction(name: str, op: str = "business") -> Any:
-        """Start a business-focused transaction"""
-        transaction = sentry_sdk.start_transaction(
-            name=name,
-            op=op,
-            custom_sampling_context={
-                "business_critical": True
-            }
-        )
-        transaction.set_tag("transaction.business", "true")
-        return transaction
+        """
+        Start a business-focused transaction OR continue existing trace.
+        
+        This method checks if there's already an active transaction (from incoming trace headers).
+        If yes, it returns a no-op context manager and adds business tags.
+        If no, it creates a new transaction.
+        """
+        from contextlib import contextmanager
+        
+        # Check if there's already an active transaction from incoming trace
+        current_transaction = sentry_sdk.get_current_span()
+        
+        if current_transaction:
+            # We have an incoming trace - just add our business tags
+            current_transaction.set_tag("transaction.business", "true")
+            # Update transaction name for better visibility
+            if hasattr(current_transaction, 'name'):
+                current_transaction.name = name
+            
+            # Return a no-op context manager that yields the current transaction
+            @contextmanager
+            def existing_transaction():
+                yield current_transaction
+            
+            return existing_transaction()
+        else:
+            # No incoming trace - create new transaction
+            transaction = sentry_sdk.start_transaction(
+                name=name,
+                op=op,
+                custom_sampling_context={
+                    "business_critical": True
+                }
+            )
+            transaction.set_tag("transaction.business", "true")
+            return transaction
 
 
 class MetricAnomalyDetector:

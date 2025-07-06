@@ -47,6 +47,15 @@ func ProxyToAnalytics(cfg *config.Config) gin.HandlerFunc {
 			}
 		}
 
+		// Add Sentry trace headers for propagation
+		if span != nil {
+			req.Header.Set("Sentry-Trace", span.ToSentryTrace())
+			// Add baggage header for dynamic sampling context
+			if baggage := span.ToBaggage(); baggage != "" {
+				req.Header.Set("Baggage", baggage)
+			}
+		}
+
 		// Make request
 		client := &http.Client{}
 		resp, err := client.Do(req)

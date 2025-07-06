@@ -73,9 +73,24 @@ class BusinessMetrics {
     }
     
     /**
-     * Start a business-focused transaction
+     * Start a business-focused transaction OR continue existing trace
      */
     static startBusinessTransaction(name, op = "business") {
+        // Check if there's already an active transaction from incoming trace
+        const activeSpan = Sentry.getActiveSpan();
+        
+        if (activeSpan) {
+            // We have an incoming trace - just add our business tags
+            const transaction = Sentry.getRootSpan(activeSpan);
+            if (transaction) {
+                transaction.setTag("transaction.business", "true");
+                // Update transaction name for better visibility
+                transaction.updateName(name);
+                return transaction;
+            }
+        }
+        
+        // No incoming trace - create new transaction
         const transaction = Sentry.startTransaction({
             name,
             op,

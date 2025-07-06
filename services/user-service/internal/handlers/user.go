@@ -29,9 +29,10 @@ func NewUserHandler(mongoClient *mongo.Client, redisClient *redis.Client) *UserH
 }
 
 func (h *UserHandler) GetBalance(c *gin.Context) {
-	// Get current span from Sentry
-	span := sentry.TransactionFromContext(c.Request.Context())
+	// Get current span from Sentry - sentrygin middleware should create it
+	span := sentry.SpanFromContext(c.Request.Context())
 	if span == nil {
+		// No incoming trace - create new transaction
 		span = sentry.StartTransaction(c.Request.Context(), "user.get_balance")
 		defer span.Finish()
 	}
@@ -115,9 +116,10 @@ func (h *UserHandler) GetBalance(c *gin.Context) {
 
 // GetHistory demonstrates N+1 query problem for performance monitoring
 func (h *UserHandler) GetHistory(c *gin.Context) {
-	// Get current span from Sentry
-	span := sentry.TransactionFromContext(c.Request.Context())
+	// Get current span from Sentry - sentrygin middleware should create it
+	span := sentry.SpanFromContext(c.Request.Context())
 	if span == nil {
+		// No incoming trace - create new transaction
 		span = sentry.StartTransaction(c.Request.Context(), "user.get_history")
 		defer span.Finish()
 	}

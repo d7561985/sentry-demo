@@ -439,12 +439,23 @@ class CalculateHandler(web.RequestHandler):
 class BusinessMetricsHandler(web.RequestHandler):
     """Endpoint to trigger business metric scenarios"""
     async def post(self):
-        transaction = sentry_sdk.start_transaction(
-            name="business_metrics_scenario",
-            op="business.demo"
-        )
+        # Check for incoming trace headers
+        sentry_trace = self.request.headers.get('sentry-trace', '')
+        baggage = self.request.headers.get('baggage', '')
         
-        with transaction:
+        # Continue trace if headers present, otherwise create new transaction
+        if sentry_trace:
+            transaction = sentry_sdk.continue_trace({
+                "sentry-trace": sentry_trace,
+                "baggage": baggage
+            }, op="business.demo", name="business_metrics_scenario")
+        else:
+            transaction = {
+                "op": "business.demo",
+                "name": "business_metrics_scenario"
+            }
+        
+        with sentry_sdk.start_transaction(transaction):
             try:
                 data = json.loads(self.request.body)
                 scenario = data.get('scenario', 'normal')
