@@ -38,13 +38,33 @@ export async function createNewTrace<T>(
   operation: string,
   callback: (span: Span | undefined) => Promise<T>
 ): Promise<T> {
-  // startNewTrace creates a new trace context, then we create a span with our name
-  return Sentry.startNewTrace(async () => {
+  // Сначала заканчиваем любую активную транзакцию pageload/navigation
+  const activeSpan = Sentry.getActiveSpan();
+  if (activeSpan) {
+    const rootSpan = Sentry.getRootSpan(activeSpan);
+    const rootOp = rootSpan ? (rootSpan as any).op : undefined;
+    
+    // Если есть активная pageload/navigation транзакция, завершаем её
+    if (rootOp === 'pageload' || rootOp === 'navigation') {
+      console.log('[Sentry] Finishing pageload/navigation transaction before creating new trace');
+      (rootSpan as any).end();
+    }
+  }
+  
+  // Создаем полностью новый контекст трейса
+  return Sentry.withScope((scope) => {
+    // Очищаем любой существующий контекст
+    scope.clearBreadcrumbs();
+    scope.setSpan(undefined);
+    
+    // Создаем новую транзакцию без родителя
     return Sentry.startSpan(
       {
         name,
         op: operation,
-        forceTransaction: true
+        forceTransaction: true,
+        parentSpanId: undefined,
+        traceId: undefined // Это заставит SDK создать новый trace ID
       },
       callback
     );

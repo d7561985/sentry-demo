@@ -40,11 +40,11 @@ Sentry.init({
       // childSpanTimeout: 15000, // по умолчанию: 15000
       
       // === ИНСТРУМЕНТИРОВАНИЕ ===
-      // Создавать span при загрузке страницы
-      // instrumentPageLoad: true, // по умолчанию: true
+      // Создавать span при загрузке страницы (важно для FCP, LCP, TTFB)
+      instrumentPageLoad: true,
       
       // Создавать span при навигации (изменение history)
-      // instrumentNavigation: true, // по умолчанию: true
+      instrumentNavigation: true,
       
       // === СВЯЗЫВАНИЕ ТРЕЙСОВ ===
       // Связывать текущий трейс с предыдущим
@@ -88,7 +88,8 @@ Sentry.init({
       
       // === ЭКСПЕРИМЕНТАЛЬНЫЕ ФУНКЦИИ ===
       _experiments: {
-        // Включить отслеживание взаимодействий пользователя
+        // Включаем отслеживание взаимодействий для Web Vitals
+        // но контролируем их через beforeStartSpan
         enableInteractions: true,
         
         // Создавать отдельные CLS spans
@@ -100,10 +101,39 @@ Sentry.init({
       
       // === КОЛБЭКИ ===
       // Модификация опций перед созданием span
-      // beforeStartSpan: (options) => {
-      //   // Можно изменить name, attributes и т.д.
-      //   return options;
-      // },
+      beforeStartSpan: (options) => {
+        // Логирование для отладки (можно удалить в продакшене)
+        if (!environment.production && options.op?.startsWith('ui.')) {
+          console.log('[Sentry] Creating span:', options.name, options.op);
+        }
+        
+        // Для взаимодействий (кликов) которые происходят после загрузки страницы
+        if (options.op?.startsWith('ui.action') || options.op?.startsWith('ui.click')) {
+          const activeSpan = Sentry.getActiveSpan();
+          if (activeSpan) {
+            const rootSpan = Sentry.getRootSpan(activeSpan);
+            const rootOp = rootSpan ? (rootSpan as any).op : undefined;
+            
+            // Если мы все еще в контексте pageload/navigation
+            if (rootOp === 'pageload' || rootOp === 'navigation') {
+              // Проверяем, прошло ли достаточно времени после загрузки
+              const startTime = (rootSpan as any).startTime;
+              const currentTime = Date.now() / 1000; // Convert to seconds
+              const timeSinceStart = currentTime - startTime;
+              
+              // Если прошло больше 3 секунд после загрузки, не присоединяем к pageload
+              if (timeSinceStart > 3) {
+                console.log('[Sentry] Preventing click attachment to pageload, time since start:', timeSinceStart);
+                // Возвращаем options без изменений - span будет создан как дочерний
+                // но наш createNewTrace все равно создаст независимую транзакцию
+                return options;
+              }
+            }
+          }
+        }
+        
+        return options;
+      },
       
       // Фильтр создания spans для запросов
       // shouldCreateSpanForRequest: (url) => {
