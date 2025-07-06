@@ -27,6 +27,7 @@
     "@angular/platform-browser": "^20.0.6",
     "@angular/platform-browser-dynamic": "^20.0.6",
     "@angular/router": "^20.0.6",
+    "@sentry-internal/browser-utils": "^9.35.0",
     "@sentry/angular": "^9.35.0",
     "@sentry/cli": "^2.20.0",
     "rxjs": "~7.5.0",

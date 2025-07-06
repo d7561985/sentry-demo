@@ -32,6 +32,20 @@ func main() {
 		Environment:      "development",
 		Debug:            true,
 		Release:          "user-service@" + version,
+		// IMPORTANT: Attach stack traces to all errors for better debugging
+		AttachStacktrace: true,
+		// Set sample rate for errors (not just traces)
+		SampleRate: 1.0,
+		// Maximum breadcrumbs
+		MaxBreadcrumbs: 100,
+		// BeforeSend hook to enrich errors
+		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+			// Add additional context to all errors
+			if event.Exception != nil && len(event.Exception) > 0 {
+				event.Fingerprint = []string{"{{ default }}", event.Exception[0].Type}
+			}
+			return event
+		},
 	})
 	if err != nil {
 		log.Fatalf("sentry.Init: %s", err)
