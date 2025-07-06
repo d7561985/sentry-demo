@@ -41,7 +41,14 @@ export APP_VERSION=$CURRENT_VERSION
 
 # Start services in production mode
 echo "🔄 Starting Docker containers..."
-docker-compose up -d --build frontend
+echo "📦 Building with version: $APP_VERSION"
+
+# Stop existing containers
+docker-compose down
+
+# Force rebuild all services with new version
+docker-compose build --no-cache
+docker-compose up -d
 
 echo ""
 echo "⏳ Waiting for services to start..."

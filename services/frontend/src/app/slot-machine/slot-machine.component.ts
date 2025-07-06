@@ -1,5 +1,7 @@
 import { Component, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import * as Sentry from '@sentry/angular';
 import { GameService } from '../services/game.service';
 import { GameStateService } from '../services/game-state.service';
@@ -419,7 +421,8 @@ export class SlotMachineComponent implements OnInit {
 
   constructor(
     private gameService: GameService,
-    private gameState: GameStateService
+    private gameState: GameStateService,
+    private http: HttpClient
   ) {}
   
   get apiUrl(): string {
@@ -559,11 +562,11 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('debug.type', 'gateway-panic');
           
           // Use special userId that triggers panic in gateway
-          const response = await fetch(`${this.apiUrl}/api/v1/debug/panic/panic-test`, {
-            method: 'GET'
-          });
-          
-          if (!response.ok) {
+          // Using HttpClient for proper trace propagation
+          try {
+            await firstValueFrom(this.http.get(`${this.apiUrl}/api/v1/debug/panic/panic-test`));
+          } catch (httpError) {
+            // Expected to fail when gateway panics
             this.debugStatus = 'Gateway panic triggered! Check Sentry for Go panic.';
           }
           setTransactionStatus(span, true);
@@ -588,19 +591,22 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('user.id', this.userId);
           
           // Call user service with invalid token
-          const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}`, {
-            method: 'GET',
-            headers: {
-              'Authorization': 'Bearer invalid-token'
+          // Using HttpClient for proper trace propagation
+          try {
+            await firstValueFrom(this.http.get(`${this.apiUrl}/api/v1/user/${this.userId}`, {
+              headers: {
+                'Authorization': 'Bearer invalid-token'
+              }
+            }));
+            this.debugStatus = `Unexpected response - no error`;
+          } catch (error: any) {
+            if (error.status === 401) {
+              this.debugStatus = '401 Auth error triggered! Check Sentry dashboard.';
+              span?.setAttribute('http.status_code', 401);
+            } else {
+              this.debugStatus = `Unexpected response: ${error.status}`;
+              span?.setAttribute('http.status_code', error.status);
             }
-          });
-          
-          if (response.status === 401) {
-            this.debugStatus = '401 Auth error triggered! Check Sentry dashboard.';
-            span?.setAttribute('http.status_code', 401);
-          } else {
-            this.debugStatus = `Unexpected response: ${response.status}`;
-            span?.setAttribute('http.status_code', response.status);
           }
           setTransactionStatus(span, true); // Debug triggers are successful even with 401
         } catch (error: any) {
@@ -624,21 +630,20 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('debug.type', 'n1-query');
           span?.setAttribute('user.id', this.userId);
           
-          const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
-            method: 'GET'
-          });
+          // Using HttpClient for proper trace propagation
+          const data = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/user/${this.userId}/history`));
           
-          if (response.ok) {
-            const data = await response.json();
+          if (data) {
             this.debugStatus = `N+1 query executed! Found ${data.totalGames} games. Check Performance in Sentry.`;
             span?.setAttribute('games.count', data.totalGames);
             setTransactionStatus(span, true);
-          } else {
-            this.debugStatus = `Failed to trigger N+1: ${response.status}`;
-            setTransactionStatus(span, false);
           }
         } catch (error: any) {
-          this.debugStatus = 'Error triggering N+1 query';
+          if (error.status) {
+            this.debugStatus = `Failed to trigger N+1: ${error.status}`;
+          } else {
+            this.debugStatus = 'Error triggering N+1 query';
+          }
           setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }
@@ -657,23 +662,22 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('debug.type', 'enhanced-n1-query');
           span?.setAttribute('performance.issue', 'n+1_queries');
           
-          const response = await fetch(`${this.apiUrl}/api/v1/analytics/player-details-n1`, {
-            method: 'GET'
-          });
+          // Using HttpClient for proper trace propagation
+          const data = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/analytics/player-details-n1`));
           
-          if (response.ok) {
-            const data = await response.json();
+          if (data) {
             this.debugStatus = `Enhanced N+1 executed! ${data.queries_executed.total} queries for ${data.player_count} players. Check Performance → Analytics in Sentry.`;
             span?.setAttribute('queries.total', data.queries_executed.total);
             span?.setAttribute('players.count', data.player_count);
             span?.setAttribute('performance.warning', data.performance_warning);
             setTransactionStatus(span, true);
-          } else {
-            this.debugStatus = `Failed to trigger enhanced N+1: ${response.status}`;
-            setTransactionStatus(span, false);
           }
         } catch (error: any) {
-          this.debugStatus = 'Error triggering enhanced N+1 query';
+          if (error.status) {
+            this.debugStatus = `Failed to trigger enhanced N+1: ${error.status}`;
+          } else {
+            this.debugStatus = 'Error triggering enhanced N+1 query';
+          }
           setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }
@@ -693,25 +697,15 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('user.id', this.userId);
           
           // Make a spin request with cpu_intensive flag
-          const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              userId: this.userId,
-              bet: 10,
-              cpu_intensive: true  // This triggers the CPU spike
-            })
-          });
+          // Using HttpClient for proper trace propagation
+          await firstValueFrom(this.http.post(`${this.apiUrl}/api/v1/spin`, {
+            userId: this.userId,
+            bet: 10,
+            cpu_intensive: true  // This triggers the CPU spike
+          }));
           
-          if (response.ok) {
-            this.debugStatus = 'CPU spike completed! Check Performance → Game Engine in Sentry.';
-            setTransactionStatus(span, true);
-          } else {
-            this.debugStatus = `Failed to trigger CPU spike: ${response.status}`;
-            setTransactionStatus(span, false);
-          }
+          this.debugStatus = 'CPU spike completed! Check Performance → Game Engine in Sentry.';
+          setTransactionStatus(span, true);
         } catch (error: any) {
           this.debugStatus = 'Error triggering CPU spike';
           setTransactionStatus(span, false, error);
@@ -733,19 +727,12 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('days.requested', 30);
           
           // Call analytics service for daily stats
-          const response = await fetch(`http://localhost:8084/api/v1/analytics/daily-stats?days=30`, {
-            method: 'GET'
-          });
+          // Using HttpClient for proper trace propagation - use API gateway proxy
+          const data = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/analytics/daily-stats?days=30`));
           
-          if (response.ok) {
-            const data = await response.json();
-            this.debugStatus = `Slow aggregation completed! Processed ${data.days_returned} days. Check Performance → Analytics in Sentry.`;
-            span?.setAttribute('days.returned', data.days_returned);
-            setTransactionStatus(span, true);
-          } else {
-            this.debugStatus = `Failed to trigger aggregation: ${response.status}`;
-            setTransactionStatus(span, false);
-          }
+          this.debugStatus = `Slow aggregation completed! Processed ${data.days_returned} days. Check Performance → Analytics in Sentry.`;
+          span?.setAttribute('days.returned', data.days_returned);
+          setTransactionStatus(span, true);
         } catch (error: any) {
           this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
           setTransactionStatus(span, false, error);
