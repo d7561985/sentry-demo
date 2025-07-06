@@ -9,6 +9,7 @@ import {
   Operations, 
   setTransactionStatus 
 } from '../utils/sentry-traces';
+import { environment } from '../../environments/environment';
 
 @Component({
     selector: 'app-slot-machine',
@@ -17,6 +18,7 @@ import {
     template: `
     <div class="slot-machine">
       <h2>🎰 Simple Slot Machine</h2>
+      <div class="version">v{{version}}</div>
     
       <div class="balance">
         Balance: $<span>{{balance()}}</span>
@@ -147,6 +149,13 @@ import {
       padding: 20px;
       max-width: 600px;
       margin: 0 auto;
+    }
+
+    .version {
+      font-size: 12px;
+      color: #666;
+      margin-top: -10px;
+      margin-bottom: 10px;
     }
 
     .balance {
@@ -403,6 +412,7 @@ export class SlotMachineComponent implements OnInit {
   lastResult = this.gameState.lastResult;
   winRate = this.gameState.winRate;
   totalSpins = this.gameState.totalSpins;
+  version = environment.version;
 
   constructor(
     private gameService: GameService,
