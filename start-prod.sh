@@ -49,7 +49,9 @@ if [ -n "$SENTRY_AUTH_TOKEN" ]; then
     echo "🔨 Building production version with source map upload..."
     echo "   Using SENTRY_ORG: ${SENTRY_ORG:-not set}"
     echo "   Using SENTRY_PROJECT: ${SENTRY_PROJECT:-not set}"
+    echo "   Using APP_VERSION: $CURRENT_VERSION"
     echo "   Sentry CLI version: $(npx @sentry/cli --version 2>/dev/null || echo 'not installed')"
+    export APP_VERSION=$CURRENT_VERSION
     npm run build:upload
 else
     echo "🔨 Building production version without source map upload..."

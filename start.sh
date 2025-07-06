@@ -20,6 +20,12 @@ fi
 echo "📋 Loading environment variables from .env..."
 export $(cat .env | grep -v '^#' | xargs)
 
+# Load version from .version file
+if [ -f .version ]; then
+    export APP_VERSION=$(cat .version)
+    echo "📌 Using version: $APP_VERSION"
+fi
+
 echo "🚀 Starting Sentry POC services..."
 
 # Start services

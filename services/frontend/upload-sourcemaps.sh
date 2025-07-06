@@ -34,6 +34,15 @@ echo "Uploading source maps..."
 echo "  Organization: $SENTRY_ORG"
 echo "  Project: $SENTRY_PROJECT"
 echo "  Directory: ./dist/frontend/browser"
+
+# Add release information if version is provided
+if [ -n "$APP_VERSION" ]; then
+  echo "  Release: $APP_VERSION"
+  RELEASE_FLAG="--release $APP_VERSION"
+else
+  RELEASE_FLAG=""
+fi
+
 echo ""
 
 # Try with verbose mode for debugging
@@ -41,16 +50,22 @@ if [ "$SENTRY_DEBUG" = "true" ]; then
     npx @sentry/cli sourcemaps upload \
       --org "$SENTRY_ORG" \
       --project "$SENTRY_PROJECT" \
+      $RELEASE_FLAG \
       --verbose \
       ./dist/frontend/browser
 else
     npx @sentry/cli sourcemaps upload \
       --org "$SENTRY_ORG" \
       --project "$SENTRY_PROJECT" \
+      $RELEASE_FLAG \
       ./dist/frontend/browser
 fi
 
 echo "✅ Source maps with debug-ids uploaded successfully!"
+
+if [ -n "$APP_VERSION" ]; then
+  echo "✅ Release $APP_VERSION created with source maps!"
+fi
 
 # Optional: Delete source maps from dist to avoid exposing them
 if [ "$DELETE_SOURCEMAPS" = "true" ]; then
