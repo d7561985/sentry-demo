@@ -55,16 +55,17 @@ export async function createNewTrace<T>(
   return Sentry.withScope((scope) => {
     // Очищаем любой существующий контекст
     scope.clearBreadcrumbs();
-    scope.setSpan(undefined);
+    // В SDK v9 используем clear() вместо setSpan(undefined)
+    scope.clear();
     
     // Создаем новую транзакцию без родителя
     return Sentry.startSpan(
       {
         name,
         op: operation,
-        forceTransaction: true,
-        parentSpanId: undefined,
-        traceId: undefined // Это заставит SDK создать новый trace ID
+        forceTransaction: true
+        // parentSpanId и traceId не поддерживаются в SDK v9
+        // forceTransaction уже создает новый trace
       },
       callback
     );

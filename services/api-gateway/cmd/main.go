@@ -65,6 +65,10 @@ func main() {
 		// Spin endpoint - main game action
 		api.POST("/spin", middleware.Auth(), handlers.Spin(cfg))
 		
+		// Analytics endpoints - proxy to analytics service
+		api.Any("/analytics/*path", handlers.ProxyToAnalytics(cfg))
+		api.Any("/business-metrics/*path", handlers.ProxyToAnalytics(cfg))
+		
 		// Trigger panic for demo (Scenario 2)
 		api.GET("/debug/panic/:userId", handlers.TriggerPanic())
 	}

@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -148,20 +150,22 @@ func (h *UserHandler) GetHistory(c *gin.Context) {
 	
 	// INTENTIONAL N+1 QUERY PROBLEM
 	// Bad practice: Get all game IDs first, then fetch each game individually
-	historySpan := span.StartChild("db.query.history")
-	historySpan.Description = "Get user game history (N+1 problem)"
-	historySpan.SetData("antipattern", "n+1_query")
+	// This creates an N+1 query pattern that Sentry should detect
 	
 	// First query: Get game IDs for this user
-	gameIDsSpan := historySpan.StartChild("db.query.game_ids")
-	gameIDsSpan.Description = "Find game IDs for user"
+	gameIDsSpan := span.StartChild("db.query")
+	gameIDsSpan.Op = "db.query"
+	gameIDsSpan.Description = "SELECT _id FROM game_history WHERE user_id = ?"
+	gameIDsSpan.SetData("db.system", "mongodb")
+	gameIDsSpan.SetData("db.name", "sentry_poc")
+	gameIDsSpan.SetData("db.collection", "game_history")
+	gameIDsSpan.SetData("db.operation", "find")
 	
 	historyCollection := h.mongoClient.Database("sentry_poc").Collection("game_history")
 	cursor, err := historyCollection.Find(ctx, bson.M{"user_id": userID}, options.Find().SetProjection(bson.M{"_id": 1}).SetLimit(20))
 	if err != nil {
 		gameIDsSpan.Status = sentry.SpanStatusInternalError
 		gameIDsSpan.Finish()
-		historySpan.Finish()
 		sentry.CaptureException(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch history"})
 		return
@@ -177,32 +181,42 @@ func (h *UserHandler) GetHistory(c *gin.Context) {
 		}
 	}
 	cursor.Close(ctx)
+	gameIDsSpan.SetData("rows_affected", len(gameIDs))
 	gameIDsSpan.Finish()
 	
 	// N+1 PROBLEM: Fetch each game individually
+	// This is the classic N+1 pattern - we make N additional queries after the first one
 	var games []models.GameHistory
 	for i, gameID := range gameIDs {
-		// Each iteration is a separate database query
-		gameSpan := historySpan.StartChild("db.query.single_game")
-		gameSpan.Description = "Fetch individual game"
-		gameSpan.SetData("game_index", i)
-		gameSpan.SetData("game_id", gameID)
+		// Each iteration is a separate database query - this is what creates the N+1 pattern
+		gameSpan := span.StartChild("db.query")
+		gameSpan.Op = "db.query"
+		gameSpan.Description = fmt.Sprintf("SELECT * FROM game_history WHERE _id = '%s'", gameID)
+		gameSpan.SetData("db.system", "mongodb")
+		gameSpan.SetData("db.name", "sentry_poc")
+		gameSpan.SetData("db.collection", "game_history")
+		gameSpan.SetData("db.operation", "findOne")
+		gameSpan.SetData("query_index", i)
 		
-		// Simulate slow query
-		time.Sleep(50 * time.Millisecond)
+		// Simulate realistic database latency (10-30ms per query)
+		// This makes the performance impact more visible
+		time.Sleep(time.Duration(10+rand.Intn(20)) * time.Millisecond)
 		
 		var game models.GameHistory
 		err := historyCollection.FindOne(ctx, bson.M{"_id": gameID}).Decode(&game)
 		if err == nil {
 			games = append(games, game)
+			gameSpan.SetData("rows_affected", 1)
+		} else {
+			gameSpan.SetData("rows_affected", 0)
 		}
 		
 		gameSpan.Finish()
 	}
 	
-	historySpan.SetData("total_queries", len(gameIDs)+1)
-	historySpan.SetData("games_fetched", len(games))
-	historySpan.Finish()
+	// Add summary data to help Sentry identify the pattern
+	span.SetData("db.n_plus_one.count", len(gameIDs))
+	span.SetData("db.n_plus_one.total_queries", len(gameIDs)+1)
 	
 	// Calculate stats
 	statsSpan := span.StartChild("calculate.stats")

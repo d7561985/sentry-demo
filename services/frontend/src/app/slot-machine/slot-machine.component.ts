@@ -126,6 +126,9 @@ import { environment } from '../../environments/environment';
               <button class="debug-button" (click)="triggerN1Query()">
                 🐌 Trigger N+1 Query
               </button>
+              <button class="debug-button" (click)="triggerEnhancedN1Query()">
+                🐌💀 Trigger Enhanced N+1
+              </button>
               <button class="debug-button" (click)="triggerCPUSpike()">
                 🔥 Trigger CPU Spike
               </button>
@@ -636,6 +639,41 @@ export class SlotMachineComponent implements OnInit {
           }
         } catch (error: any) {
           this.debugStatus = 'Error triggering N+1 query';
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
+        }
+      }
+    );
+  }
+
+  async triggerEnhancedN1Query(): Promise<void> {
+    this.debugStatus = 'Triggering enhanced N+1 query (analytics)...';
+    
+    await createNewTrace(
+      'user-action.debug.enhanced-n1-query',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'enhanced-n1-query');
+          span?.setAttribute('performance.issue', 'n+1_queries');
+          
+          const response = await fetch(`${this.apiUrl}/api/v1/analytics/player-details-n1`, {
+            method: 'GET'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            this.debugStatus = `Enhanced N+1 executed! ${data.queries_executed.total} queries for ${data.player_count} players. Check Performance → Analytics in Sentry.`;
+            span?.setAttribute('queries.total', data.queries_executed.total);
+            span?.setAttribute('players.count', data.player_count);
+            span?.setAttribute('performance.warning', data.performance_warning);
+            setTransactionStatus(span, true);
+          } else {
+            this.debugStatus = `Failed to trigger enhanced N+1: ${response.status}`;
+            setTransactionStatus(span, false);
+          }
+        } catch (error: any) {
+          this.debugStatus = 'Error triggering enhanced N+1 query';
           setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }

@@ -31,12 +31,9 @@ sentry_sdk.init(
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for tracing.
     traces_sample_rate=1.0,
-    # Set profile_session_sample_rate to 1.0 to profile 100%
-    # of profile sessions.
-    profile_session_sample_rate=1.0,
-    # Set profile_lifecycle to "trace" to automatically
-    # run the profiler on when there is an active transaction
-    profile_lifecycle="trace",
+    # Set profiles_sample_rate to 1.0 to profile 100%
+    # of sampled transactions.
+    profiles_sample_rate=1.0,
     environment="development",
     debug=True,
     release=f"analytics-service@{version}"
@@ -669,6 +666,124 @@ async def get_financial_summary(days: int = 7):
                     }
                 }
                 
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/analytics/player-details-n1")
+async def get_player_details_n1():
+    """
+    Intentional N+1 query pattern for demonstrating performance issues.
+    This endpoint fetches player details in the worst possible way.
+    """
+    with sentry_sdk.start_transaction(op="analytics.n1_query_demo", name="N+1 Query Demo") as transaction:
+        transaction.set_tag("antipattern", "n+1_query")
+        
+        try:
+            # First query: Get all active player IDs
+            with sentry_sdk.start_span(op="db.query", description="SELECT DISTINCT user_id FROM games WHERE timestamp > ?") as span:
+                span.set_data("db.system", "mongodb")
+                span.set_data("db.name", "sentry_poc")
+                span.set_data("db.collection", "games")
+                span.set_data("db.operation", "distinct")
+                
+                # Get players who played in the last hour
+                one_hour_ago = time.time() - 3600
+                player_ids = db.games.distinct("user_id", {"timestamp": {"$gte": one_hour_ago}})
+                
+                # Limit to 20 players for demo
+                player_ids = player_ids[:20]
+                
+                span.set_data("rows_affected", len(player_ids))
+                time.sleep(0.05)  # Simulate query time
+            
+            # N+1 PROBLEM: Fetch details for each player individually
+            player_details = []
+            
+            for i, player_id in enumerate(player_ids):
+                # Query 1: Get player's total games
+                with sentry_sdk.start_span(op="db.query", description=f"SELECT COUNT(*) FROM games WHERE user_id = '{player_id}'") as span:
+                    span.set_data("db.system", "mongodb")
+                    span.set_data("db.name", "sentry_poc")
+                    span.set_data("db.collection", "games")
+                    span.set_data("db.operation", "count")
+                    span.set_data("n_plus_one.index", i)
+                    
+                    game_count = db.games.count_documents({"user_id": player_id})
+                    time.sleep(0.02)  # Simulate query time
+                
+                # Query 2: Get player's total bets
+                with sentry_sdk.start_span(op="db.query", description=f"SELECT SUM(bet) FROM games WHERE user_id = '{player_id}'") as span:
+                    span.set_data("db.system", "mongodb")
+                    span.set_data("db.name", "sentry_poc")
+                    span.set_data("db.collection", "games")
+                    span.set_data("db.operation", "aggregate")
+                    span.set_data("n_plus_one.index", i)
+                    
+                    bet_result = list(db.games.aggregate([
+                        {"$match": {"user_id": player_id}},
+                        {"$group": {"_id": None, "total": {"$sum": "$bet"}}}
+                    ]))
+                    total_bets = bet_result[0]["total"] if bet_result else 0
+                    time.sleep(0.02)
+                
+                # Query 3: Get player's total payouts
+                with sentry_sdk.start_span(op="db.query", description=f"SELECT SUM(payout) FROM games WHERE user_id = '{player_id}'") as span:
+                    span.set_data("db.system", "mongodb")
+                    span.set_data("db.name", "sentry_poc")
+                    span.set_data("db.collection", "games")
+                    span.set_data("db.operation", "aggregate")
+                    span.set_data("n_plus_one.index", i)
+                    
+                    payout_result = list(db.games.aggregate([
+                        {"$match": {"user_id": player_id}},
+                        {"$group": {"_id": None, "total": {"$sum": "$payout"}}}
+                    ]))
+                    total_payouts = payout_result[0]["total"] if payout_result else 0
+                    time.sleep(0.02)
+                
+                # Query 4: Get player's last game time
+                with sentry_sdk.start_span(op="db.query", description=f"SELECT MAX(timestamp) FROM games WHERE user_id = '{player_id}'") as span:
+                    span.set_data("db.system", "mongodb")
+                    span.set_data("db.name", "sentry_poc")
+                    span.set_data("db.collection", "games")
+                    span.set_data("db.operation", "find_one")
+                    span.set_data("n_plus_one.index", i)
+                    
+                    last_game = db.games.find_one(
+                        {"user_id": player_id},
+                        sort=[("timestamp", -1)]
+                    )
+                    last_played = last_game["timestamp"] if last_game else None
+                    time.sleep(0.02)
+                
+                player_details.append({
+                    "user_id": player_id,
+                    "total_games": game_count,
+                    "total_bets": total_bets,
+                    "total_payouts": total_payouts,
+                    "net_profit": total_payouts - total_bets,
+                    "last_played": last_played
+                })
+            
+            # Add performance issue metadata
+            total_queries = 1 + (len(player_ids) * 4)  # 1 initial + 4 per player
+            transaction.set_data("db.n_plus_one.count", len(player_ids))
+            transaction.set_data("db.n_plus_one.total_queries", total_queries)
+            transaction.set_data("performance.issue", "n+1_queries")
+            
+            return {
+                "player_count": len(player_details),
+                "players": player_details,
+                "performance_warning": f"This endpoint executed {total_queries} queries (N+1 pattern). Should use 1 aggregation query instead.",
+                "query_pattern": "N+1",
+                "queries_executed": {
+                    "initial_query": 1,
+                    "per_player_queries": 4,
+                    "total": total_queries
+                }
+            }
+            
         except Exception as e:
             sentry_sdk.capture_exception(e)
             raise HTTPException(status_code=500, detail=str(e))
