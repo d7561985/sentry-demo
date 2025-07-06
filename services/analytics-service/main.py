@@ -42,7 +42,9 @@ sentry_sdk.init(
     profiles_sample_rate=1.0,
     environment="development",
     debug=True,
-    release=f"analytics-service@{version}"
+    release=f"analytics-service@{version}",
+    # Enable session tracking for crash free rate
+    auto_session_tracking=True
 )
 
 # MongoDB connection

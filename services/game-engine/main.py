@@ -31,7 +31,9 @@ sentry_sdk.init(
     # run the profiler on when there is an active transaction
     #profile_lifecycle="trace",
     debug=True,
-    release=f"game-engine@{version}"
+    release=f"game-engine@{version}",
+    # Enable session tracking for crash free rate
+    auto_session_tracking=True
 )
 
 # MongoDB connection
@@ -246,15 +248,19 @@ class CalculateHandler(web.RequestHandler):
     
     def _calculate_slot_result_cpu_intensive(self):
         """CPU-intensive calculation with 90% RTP using prime number generation"""
+        import time
+        start_time = time.time()
+        
         with start_span(op="cpu.prime_generation", description="Generate large primes") as span:
             # Generate large prime numbers (VERY inefficient on purpose)
             primes = []
-            num = 1000000  # Start with a large number
-            while len(primes) < 3:
+            num = 10000000  # Start with a much larger number for more CPU work
+            while len(primes) < 10:  # Generate 10 primes instead of 3
                 if self._is_prime(num):
                     primes.append(num)
                 num += 1
-            span.set_data("primes_generated", primes)
+            span.set_data("primes_generated", len(primes))
+            span.set_data("largest_prime", primes[-1])
         
         with start_span(op="cpu.heavy_calculation", description="Heavy math operations") as span:
             # Symbol weights for 90% RTP
@@ -275,16 +281,37 @@ class CalculateHandler(web.RequestHandler):
             
             # Do heavy calculations to determine win (30% chance for 90% RTP)
             heavy_calc_sum = 0
+            matrix_size = 100  # Add matrix operations
+            
+            # Create random matrices for multiplication
+            matrix_a = np.random.rand(matrix_size, matrix_size)
+            matrix_b = np.random.rand(matrix_size, matrix_size)
+            
+            # Perform multiple matrix multiplications (very CPU intensive)
+            with start_span(op="cpu.matrix_operations", description="Matrix multiplications") as matrix_span:
+                for _ in range(5):  # 5 matrix multiplications
+                    result_matrix = np.matmul(matrix_a, matrix_b)
+                    matrix_a = result_matrix  # Use result for next iteration
+                matrix_span.set_data("matrix_size", f"{matrix_size}x{matrix_size}")
+                matrix_span.set_data("multiplications", 5)
+            
+            # Continue with prime-based calculations
             for prime in primes:
-                # CPU-intensive operations
-                for i in range(10000):
+                # More intensive CPU operations
+                for i in range(5000):  # Reduced iterations but with more complex math
                     heavy_calc_sum += np.sin(prime * i) * np.cos(prime / (i + 1))
                     heavy_calc_sum += np.log(abs(heavy_calc_sum) + 1)
+                    # Add exponential calculations
+                    heavy_calc_sum += np.exp(-abs(heavy_calc_sum) / 1000000)
+            
+            # Calculate elapsed time
+            elapsed_ms = (time.time() - start_time) * 1000
+            span.set_data("calculation_time_ms", round(elapsed_ms, 2))
             
             # Use the heavy calculation to determine if this is a winning spin
             # Normalize to 0-1 range and check if < 0.30 for 30% win rate
             win_threshold = abs(heavy_calc_sum) % 100 / 100.0
-            is_winning_spin = win_threshold < 0.30
+            is_winning_spin = win_threshold < 0.90
             
             if is_winning_spin:
                 # For winning spins, select one symbol for all reels

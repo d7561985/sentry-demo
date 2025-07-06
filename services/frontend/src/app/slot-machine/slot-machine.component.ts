@@ -461,7 +461,16 @@ export class SlotMachineComponent implements OnInit {
             span?.setAttribute('payout', result.payout);
             span?.setAttribute('balance.after', result.newBalance);
         
-            // Wait for animation to complete
+            // Show the result symbols immediately
+            if (result.symbols && result.symbols.length > 0) {
+              this.reels = [
+                result.symbols[0] || '🍒',
+                result.symbols[1] || result.symbols[0] || '🍒',
+                result.symbols[2] || result.symbols[0] || '🍒'
+              ];
+            }
+            
+            // Short animation to show final result (just one more spin cycle)
             await new Promise<void>(resolve => {
               setTimeout(() => {
                 // Update state through service
@@ -473,16 +482,8 @@ export class SlotMachineComponent implements OnInit {
                   betAmount: 10,
                   newBalance: result.newBalance
                 });
-                // Show the result symbols (use first 3 or repeat if less)
-                if (result.symbols && result.symbols.length > 0) {
-                  this.reels = [
-                    result.symbols[0] || '🍒',
-                    result.symbols[1] || result.symbols[0] || '🍒',
-                    result.symbols[2] || result.symbols[0] || '🍒'
-                  ];
-                }
                 resolve();
-              }, 2500);
+              }, 800); // One animation cycle (matching CSS animation duration)
             });
             
             setTransactionStatus(span, true);

@@ -27,6 +27,9 @@ Sentry.init({
   // === ИНТЕГРАЦИИ ===
   // Массив интеграций для расширения функциональности
   integrations: [
+    // Включаем отслеживание сессий для Crash Free Rate
+    Sentry.browserSessionIntegration(),
+    
     // Отслеживание производительности для Angular роутинга и HTTP запросов
     Sentry.browserTracingIntegration({
       // === ВРЕМЕННЫЕ НАСТРОЙКИ ===
