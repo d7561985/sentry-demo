@@ -3,6 +3,12 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { interval, Subscription } from 'rxjs';
 import * as Sentry from '@sentry/angular';
+import { 
+  createNewTrace, 
+  TransactionNames, 
+  Operations, 
+  setTransactionStatus 
+} from '../utils/sentry-traces';
 
 interface MetricData {
   period_hours: number;
@@ -219,46 +225,82 @@ export class BusinessMetricsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private loadMetrics(): void {
-    Sentry.startSpan(
-      {
-        name: 'business-metrics-refresh',
-        op: 'http'
-      },
-      () => {
-        // Load RTP metrics
-        this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/rtp?hours=1`)
-          .subscribe({
-            next: (data) => {
-              this.rtpData = data;
-              this.hasError = false;
-            },
-            error: (err) => {
-              this.handleError('Failed to load RTP metrics', err);
-            }
-          });
+  private async loadMetrics(): Promise<void> {
+    await createNewTrace(
+      TransactionNames.METRICS_REFRESH,
+      Operations.USER_ACTION,
+      async (span) => {
+        try {
+          span?.setAttribute('metrics.type', 'all');
+          span?.setAttribute('refresh.auto', true);
+          
+          // Track the number of successful API calls
+          let successCount = 0;
+          let errorCount = 0;
+          
+          // Load RTP metrics
+          this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/rtp?hours=1`)
+            .subscribe({
+              next: (data) => {
+                this.rtpData = data;
+                this.hasError = false;
+                successCount++;
+                span?.setAttribute('metrics.rtp.success', true);
+                span?.setAttribute('rtp.value', data.overall_rtp);
+                span?.setAttribute('rtp.status', data.rtp_threshold?.status || 'normal');
+              },
+              error: (err) => {
+                errorCount++;
+                span?.setAttribute('metrics.rtp.success', false);
+                this.handleError('Failed to load RTP metrics', err);
+              }
+            });
 
-        // Load session metrics
-        this.http.get<any>(`${this.analyticsUrl}/api/v1/business-metrics/sessions`)
-          .subscribe({
-            next: (data) => {
-              this.sessionData = data;
-        },
-        error: (err) => {
-          this.handleError('Failed to load session metrics', err);
+          // Load session metrics
+          this.http.get<any>(`${this.analyticsUrl}/api/v1/business-metrics/sessions`)
+            .subscribe({
+              next: (data) => {
+                this.sessionData = data;
+                successCount++;
+                span?.setAttribute('metrics.sessions.success', true);
+                span?.setAttribute('sessions.active', data.active_sessions || 0);
+              },
+              error: (err) => {
+                errorCount++;
+                span?.setAttribute('metrics.sessions.success', false);
+                this.handleError('Failed to load session metrics', err);
+              }
+            });
+
+          // Load financial metrics
+          this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/financial?hours=24`)
+            .subscribe({
+              next: (data) => {
+                this.financialData = data;
+                successCount++;
+                span?.setAttribute('metrics.financial.success', true);
+                span?.setAttribute('financial.revenue', data.total_revenue || 0);
+              },
+              error: (err) => {
+                errorCount++;
+                span?.setAttribute('metrics.financial.success', false);
+                this.handleError('Failed to load financial metrics', err);
+              }
+            });
+          
+          // Add a small delay to ensure all requests have been initiated
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Set final transaction status based on overall success
+          span?.setAttribute('metrics.success_count', successCount);
+          span?.setAttribute('metrics.error_count', errorCount);
+          
+          // Transaction is successful even if some metrics fail
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
         }
-      });
-
-    // Load financial metrics
-    this.http.get<MetricData>(`${this.analyticsUrl}/api/v1/business-metrics/financial?hours=24`)
-      .subscribe({
-        next: (data) => {
-          this.financialData = data;
-        },
-        error: (err) => {
-          this.handleError('Failed to load financial metrics', err);
-          }
-        });
       }
     );
   }

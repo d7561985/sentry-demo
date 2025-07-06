@@ -12,6 +12,7 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
         <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" style="margin: 0 10px; color: #4CAF50; text-decoration: none;">Slot Machine</a>
         <a routerLink="/metrics" routerLinkActive="active" style="margin: 0 10px; color: #4CAF50; text-decoration: none;">Business Metrics</a>
       </nav>
+      
       @defer (on viewport) {
         <router-outlet></router-outlet>
       } @placeholder {

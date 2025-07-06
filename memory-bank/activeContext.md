@@ -1,9 +1,9 @@
 # activeContext.md
 Current Phase: VAN
-Previous Phase: IMPLEMENT
-Task Focus: Fix Angular animation and Sentry Session Replay issues
-Complexity Level: 1
-Start Time: 2025-01-05
+Previous Phase: ARCHIVE
+Task Focus: Integrate Sentry Debug-IDs for Source Maps
+Complexity Level: 2
+Start Time: 2025-01-06
 
 ## Completed Work
 ### Angular 13 → 20 Sequential Migration ✅

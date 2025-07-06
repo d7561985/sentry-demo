@@ -154,14 +154,14 @@ Sentry.init({
       
       // === ПРОИЗВОДИТЕЛЬНОСТЬ REPLAY ===
       // Минимальная длительность replay в мс
-      // minReplayDuration: 5000,
+      minReplayDuration: 5000,
       
       // Максимальная длительность replay в мс (по умолчанию 60 минут)
-      // maxReplayDuration: 3600000,
+      maxReplayDuration: 60000, // Ограничить 1 минутой для демо
       
       // === ОБРАБОТКА ОШИБОК ===
       // Обработчик ошибок записи
-      // onError: (error) => console.error('Replay error:', error),
+      onError: (error) => console.error('Replay error:', error),
     }),
     
     // Виджет обратной связи от пользователей

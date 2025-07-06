@@ -3,6 +3,12 @@ import { CommonModule } from '@angular/common';
 import * as Sentry from '@sentry/angular';
 import { GameService } from '../services/game.service';
 import { GameStateService } from '../services/game-state.service';
+import { 
+  createNewTrace, 
+  TransactionNames, 
+  Operations, 
+  setTransactionStatus 
+} from '../utils/sentry-traces';
 
 @Component({
     selector: 'app-slot-machine',
@@ -421,20 +427,23 @@ export class SlotMachineComponent implements OnInit {
     // Start the spinning animation
     this.gameState.startSpin();
     
-    // Start a NEW span for the spin action using v8 API
-    await Sentry.startSpan(
-      {
-        name: 'slot-machine-spin',
-        op: 'user-action'
-      },
+    // Create an independent transaction for the spin action
+    await createNewTrace(
+      TransactionNames.SLOT_SPIN,
+      Operations.USER_ACTION,
       async (span) => {
-    
         try {
+          // Add user context attributes
+          span?.setAttribute('user.id', this.userId);
+          span?.setAttribute('bet.amount', 10);
+          span?.setAttribute('balance.before', this.balance());
+          
           const result = await this.gameService.spin(this.userId, 10).toPromise();
           if (result) {
             // Add custom context
             span?.setAttribute('win', result.win);
             span?.setAttribute('payout', result.payout);
+            span?.setAttribute('balance.after', result.newBalance);
         
             // Wait for animation to complete
             await new Promise<void>(resolve => {
@@ -459,6 +468,8 @@ export class SlotMachineComponent implements OnInit {
                 resolve();
               }, 2500);
             });
+            
+            setTransactionStatus(span, true);
           }
         } catch (error: any) {
           this.error = error.message || 'Something went wrong!';
@@ -471,9 +482,9 @@ export class SlotMachineComponent implements OnInit {
             betAmount: 10,
             newBalance: this.balance()
           });
-          // In v8, error status is automatically set when exception is thrown
+          
+          setTransactionStatus(span, false, error);
           Sentry.captureException(error);
-          throw error; // Re-throw to let Sentry handle span status
         }
       }
     );
@@ -484,63 +495,107 @@ export class SlotMachineComponent implements OnInit {
   async triggerPromiseRejection(): Promise<void> {
     this.debugStatus = 'Triggering unhandled promise rejection...';
     
-    // Create a promise that will reject after 1 second
-    // NOT catching this error intentionally to demonstrate unhandled rejection
-    setTimeout(() => {
-      // This promise rejection will be unhandled
-      Promise.reject(new Error('Unhandled promise rejection from debug panel'));
-      this.debugStatus = 'Promise rejection triggered! Check Sentry dashboard.';
-    }, 1000);
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_PROMISE,
+      Operations.DEBUG,
+      async (span) => {
+        span?.setAttribute('debug.type', 'promise-rejection');
+        
+        // Create a promise that will reject after 1 second
+        // NOT catching this error intentionally to demonstrate unhandled rejection
+        setTimeout(() => {
+          // This promise rejection will be unhandled
+          Promise.reject(new Error('Unhandled promise rejection from debug panel'));
+          this.debugStatus = 'Promise rejection triggered! Check Sentry dashboard.';
+        }, 1000);
+        
+        // Mark transaction as complete before the rejection happens
+        setTransactionStatus(span, true);
+      }
+    );
   }
   
-  triggerComponentError(): void {
+  async triggerComponentError(): Promise<void> {
     this.debugStatus = 'Triggering component error...';
     
-    // Intentionally throw an error to be caught by Angular ErrorHandler
-    setTimeout(() => {
-      throw new Error('Component error triggered from debug panel');
-    }, 100);
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_ERROR,
+      Operations.DEBUG,
+      async (span) => {
+        span?.setAttribute('debug.type', 'component-error');
+        
+        // Intentionally throw an error to be caught by Angular ErrorHandler
+        setTimeout(() => {
+          throw new Error('Component error triggered from debug panel');
+        }, 100);
+        
+        // Mark transaction as complete before the error is thrown
+        setTransactionStatus(span, true);
+      }
+    );
   }
   
   async triggerGatewayPanic(): Promise<void> {
     this.debugStatus = 'Triggering gateway panic...';
     
-    try {
-      // Use special userId that triggers panic in gateway
-      const response = await fetch(`${this.apiUrl}/api/v1/debug/panic/panic-test`, {
-        method: 'GET'
-        // Sentry will automatically add trace headers via BrowserTracing
-      });
-      
-      if (!response.ok) {
-        this.debugStatus = 'Gateway panic triggered! Check Sentry for Go panic.';
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_PANIC,
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'gateway-panic');
+          
+          // Use special userId that triggers panic in gateway
+          const response = await fetch(`${this.apiUrl}/api/v1/debug/panic/panic-test`, {
+            method: 'GET'
+          });
+          
+          if (!response.ok) {
+            this.debugStatus = 'Gateway panic triggered! Check Sentry for Go panic.';
+          }
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          this.debugStatus = 'Gateway panic triggered (connection lost)';
+          // This is expected when gateway panics
+          setTransactionStatus(span, true);
+        }
       }
-    } catch (error) {
-      this.debugStatus = 'Gateway panic triggered (connection lost)';
-    }
+    );
   }
   
   async triggerAuthError(): Promise<void> {
     this.debugStatus = 'Triggering 401 auth error...';
     
-    try {
-      // Call user service with invalid token
-      const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Bearer invalid-token'
-          // Sentry will automatically add trace headers via BrowserTracing
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_AUTH,
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'auth-error');
+          span?.setAttribute('user.id', this.userId);
+          
+          // Call user service with invalid token
+          const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': 'Bearer invalid-token'
+            }
+          });
+          
+          if (response.status === 401) {
+            this.debugStatus = '401 Auth error triggered! Check Sentry dashboard.';
+            span?.setAttribute('http.status_code', 401);
+          } else {
+            this.debugStatus = `Unexpected response: ${response.status}`;
+            span?.setAttribute('http.status_code', response.status);
+          }
+          setTransactionStatus(span, true); // Debug triggers are successful even with 401
+        } catch (error: any) {
+          this.debugStatus = 'Error calling user service';
+          setTransactionStatus(span, false, error);
         }
-      });
-      
-      if (response.status === 401) {
-        this.debugStatus = '401 Auth error triggered! Check Sentry dashboard.';
-      } else {
-        this.debugStatus = `Unexpected response: ${response.status}`;
       }
-    } catch (error) {
-      this.debugStatus = 'Error calling user service';
-    }
+    );
   }
   
   // Performance Issue Triggers
@@ -548,25 +603,30 @@ export class SlotMachineComponent implements OnInit {
   async triggerN1Query(): Promise<void> {
     this.debugStatus = 'Triggering N+1 query problem...';
     
-    await Sentry.startSpan(
-      {
-        name: 'debug-n1-query',
-        op: 'http'
-      },
-      async () => {
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_N1,
+      Operations.DEBUG,
+      async (span) => {
         try {
-      const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
-        method: 'GET'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        this.debugStatus = `N+1 query executed! Found ${data.totalGames} games. Check Performance in Sentry.`;
-      } else {
-        this.debugStatus = `Failed to trigger N+1: ${response.status}`;
-      }
-        } catch (error) {
+          span?.setAttribute('debug.type', 'n1-query');
+          span?.setAttribute('user.id', this.userId);
+          
+          const response = await fetch(`${this.apiUrl}/api/v1/user/${this.userId}/history`, {
+            method: 'GET'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            this.debugStatus = `N+1 query executed! Found ${data.totalGames} games. Check Performance in Sentry.`;
+            span?.setAttribute('games.count', data.totalGames);
+            setTransactionStatus(span, true);
+          } else {
+            this.debugStatus = `Failed to trigger N+1: ${response.status}`;
+            setTransactionStatus(span, false);
+          }
+        } catch (error: any) {
           this.debugStatus = 'Error triggering N+1 query';
+          setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }
       }
@@ -576,33 +636,37 @@ export class SlotMachineComponent implements OnInit {
   async triggerCPUSpike(): Promise<void> {
     this.debugStatus = 'Triggering CPU spike in game engine...';
     
-    await Sentry.startSpan(
-      {
-        name: 'debug-cpu-spike',
-        op: 'http'
-      },
-      async () => {
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_CPU,
+      Operations.DEBUG,
+      async (span) => {
         try {
-      // Make a spin request with cpu_intensive flag
-      const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: this.userId,
-          bet: 10,
-          cpu_intensive: true  // This triggers the CPU spike
-        })
-      });
-      
-      if (response.ok) {
-        this.debugStatus = 'CPU spike completed! Check Performance → Game Engine in Sentry.';
-      } else {
-        this.debugStatus = `Failed to trigger CPU spike: ${response.status}`;
-      }
-        } catch (error) {
+          span?.setAttribute('debug.type', 'cpu-spike');
+          span?.setAttribute('user.id', this.userId);
+          
+          // Make a spin request with cpu_intensive flag
+          const response = await fetch(`${this.apiUrl}/api/v1/spin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              userId: this.userId,
+              bet: 10,
+              cpu_intensive: true  // This triggers the CPU spike
+            })
+          });
+          
+          if (response.ok) {
+            this.debugStatus = 'CPU spike completed! Check Performance → Game Engine in Sentry.';
+            setTransactionStatus(span, true);
+          } else {
+            this.debugStatus = `Failed to trigger CPU spike: ${response.status}`;
+            setTransactionStatus(span, false);
+          }
+        } catch (error: any) {
           this.debugStatus = 'Error triggering CPU spike';
+          setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }
       }
@@ -612,26 +676,31 @@ export class SlotMachineComponent implements OnInit {
   async triggerSlowAggregation(): Promise<void> {
     this.debugStatus = 'Triggering slow MongoDB aggregation...';
     
-    await Sentry.startSpan(
-      {
-        name: 'debug-slow-aggregation',
-        op: 'http'
-      },
-      async () => {
+    await createNewTrace(
+      TransactionNames.SLOT_DEBUG_AGGREGATION,
+      Operations.DEBUG,
+      async (span) => {
         try {
-      // Call analytics service for daily stats
-      const response = await fetch(`http://localhost:8084/api/v1/analytics/daily-stats?days=30`, {
-        method: 'GET'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        this.debugStatus = `Slow aggregation completed! Processed ${data.days_returned} days. Check Performance → Analytics in Sentry.`;
-      } else {
-        this.debugStatus = `Failed to trigger aggregation: ${response.status}`;
-      }
-        } catch (error) {
+          span?.setAttribute('debug.type', 'slow-aggregation');
+          span?.setAttribute('days.requested', 30);
+          
+          // Call analytics service for daily stats
+          const response = await fetch(`http://localhost:8084/api/v1/analytics/daily-stats?days=30`, {
+            method: 'GET'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            this.debugStatus = `Slow aggregation completed! Processed ${data.days_returned} days. Check Performance → Analytics in Sentry.`;
+            span?.setAttribute('days.returned', data.days_returned);
+            setTransactionStatus(span, true);
+          } else {
+            this.debugStatus = `Failed to trigger aggregation: ${response.status}`;
+            setTransactionStatus(span, false);
+          }
+        } catch (error: any) {
           this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
+          setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }
       }

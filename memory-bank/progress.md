@@ -160,3 +160,30 @@ Successfully migrated Angular application from v13.3.0 to v20.0.6 with:
 - ✅ Modern template syntax
 - ✅ Optimized build configuration
 - ✅ Lazy loading implemented
+
+---
+
+## 2025-01-06: Sentry Independent Traces Implementation - COMPLETED ✅
+
+### Implementation Summary
+- **Created**: `/services/frontend/src/app/utils/sentry-traces.ts` - Utility module for independent traces
+- **Updated**: `/services/frontend/src/main.ts` - Fixed replay configuration with duration limits
+- **Updated**: `/services/frontend/src/app/slot-machine/slot-machine.component.ts` - All actions use createNewTrace
+- **Updated**: `/services/frontend/src/app/business-metrics/business-metrics.component.ts` - Metrics refresh uses independent trace
+- **Removed**: Test components and diagnostic code
+
+### Key Achievements
+- ✅ Implemented `createNewTrace()` using `Sentry.startNewTrace()` - the only working method
+- ✅ Fixed infinite replay recording with `maxReplayDuration: 60000`
+- ✅ Established transaction naming convention: `user-action.component.action`
+- ✅ Proper error handling with numeric status codes (1 = OK, 2 = ERROR)
+
+### Technical Insights
+- Only `startNewTrace()` creates truly independent transactions in Sentry SDK v9
+- TypeScript types can be misleading - always test actual behavior
+- Replay needs explicit duration limits to prevent infinite recording
+
+### Archive Reference
+- **Archive Document**: `/docs/archive/tasks/sentry-independent-traces-20250106.md`
+- **Reflection Document**: `/memory-bank/reflect-sentry-traces-2025-01-06.md`
+- **Status**: ARCHIVED ✅
