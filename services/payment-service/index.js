@@ -352,6 +352,256 @@ async function getDailyFinancialStats(db) {
   }
 }
 
+// Debug endpoints for crash demonstrations
+app.get('/debug/crash', (req, res) => {
+  // Add breadcrumbs
+  Sentry.addBreadcrumb({
+    message: 'User accessed debug crash endpoint',
+    category: 'debug',
+    level: 'info',
+    data: {
+      endpoint: '/debug/crash',
+      service: 'payment-service',
+      userAgent: req.get('user-agent')
+    }
+  });
+  
+  // Set user context
+  Sentry.setUser({
+    id: 'debug-payment-user',
+    username: 'payment_tester'
+  });
+  
+  // Add runtime context
+  const os = require('os');
+  Sentry.setContext('runtime', {
+    memory_mb: process.memoryUsage().rss / 1024 / 1024,
+    heap_used_mb: process.memoryUsage().heapUsed / 1024 / 1024,
+    cpu_count: os.cpus().length,
+    node_version: process.version,
+    uptime_seconds: process.uptime()
+  });
+  
+  // Trigger crash
+  throw new Error('[DEMO] Payment Service crash triggered! This demonstrates Node.js error tracking with rich context.');
+});
+
+app.get('/debug/promise-rejection', async (req, res) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Starting unhandled promise rejection demo',
+    category: 'debug.promise',
+    level: 'warning'
+  });
+  
+  // Create a promise that will reject
+  const problematicPromise = new Promise((resolve, reject) => {
+    setTimeout(() => {
+      reject(new Error('Unhandled promise rejection in payment processing'));
+    }, 100);
+  });
+  
+  // Intentionally don't catch it
+  problematicPromise.then(() => {
+    console.log('This will never run');
+  });
+  // Missing .catch() - this will trigger unhandledRejection
+  
+  res.json({ status: 'Promise rejection triggered - check Sentry' });
+});
+
+app.get('/debug/memory-leak', (req, res) => {
+  // Static variable to persist between requests
+  if (!global.memoryLeakArray) {
+    global.memoryLeakArray = [];
+  }
+  
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Creating memory leak',
+    category: 'debug.memory',
+    level: 'warning',
+    data: {
+      current_size: global.memoryLeakArray.length,
+      memory_before_mb: process.memoryUsage().heapUsed / 1024 / 1024
+    }
+  });
+  
+  // Create 50MB of data
+  const leakSize = 50 * 1024 * 1024;
+  const bigString = 'X'.repeat(leakSize);
+  global.memoryLeakArray.push(bigString);
+  
+  // Also create objects that reference each other (harder to GC)
+  const circularRef = { data: new Array(1000000).fill('memory leak') };
+  circularRef.self = circularRef;
+  global.memoryLeakArray.push(circularRef);
+  
+  const memoryAfter = process.memoryUsage().heapUsed / 1024 / 1024;
+  
+  // Log memory growth
+  Sentry.setContext('memory_leak', {
+    heap_used_mb: memoryAfter,
+    total_leaked_items: global.memoryLeakArray.length,
+    estimated_leak_mb: global.memoryLeakArray.length * 50
+  });
+  
+  // Capture warning
+  Sentry.captureMessage(
+    `Memory leak demo: ${memoryAfter.toFixed(2)}MB heap used, ${global.memoryLeakArray.length} items leaked`,
+    'warning'
+  );
+  
+  res.json({
+    status: 'Memory leak created',
+    heap_used_mb: memoryAfter,
+    leaked_items: global.memoryLeakArray.length,
+    estimated_total_leak_mb: global.memoryLeakArray.length * 50
+  });
+});
+
+app.get('/debug/event-loop-block', (req, res) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Starting event loop blocking demo',
+    category: 'debug.performance',
+    level: 'error',
+    data: { block_duration_ms: 3000 }
+  });
+  
+  const start = Date.now();
+  
+  // Block the event loop for 3 seconds
+  // This is BAD - demonstrates what NOT to do
+  while (Date.now() - start < 3000) {
+    // Intensive calculation
+    Math.sqrt(Math.random());
+  }
+  
+  // Log the blocking
+  Sentry.captureMessage(
+    'Event loop blocked for 3 seconds - this would freeze all requests!',
+    'error'
+  );
+  
+  res.json({
+    status: 'Event loop was blocked',
+    duration_ms: Date.now() - start,
+    warning: 'This blocked ALL requests to this service for 3 seconds!'
+  });
+});
+
+app.get('/debug/stack-overflow', (req, res) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Triggering stack overflow',
+    category: 'debug.stack',
+    level: 'error'
+  });
+  
+  // Recursive function that will cause stack overflow
+  let depth = 0;
+  function recurse() {
+    depth++;
+    // Add some data to each frame to make it overflow faster
+    const data = new Array(100).fill(`depth: ${depth}`);
+    recurse(); // No base case - will overflow
+  }
+  
+  try {
+    recurse();
+  } catch (error) {
+    // Add context about the overflow
+    Sentry.withScope(scope => {
+      scope.setContext('stack_overflow', {
+        max_depth_reached: depth,
+        error_type: error.name,
+        message: error.message
+      });
+      Sentry.captureException(error);
+    });
+    
+    res.status(500).json({
+      error: 'Stack overflow occurred',
+      depth_reached: depth
+    });
+  }
+});
+
+app.get('/debug/type-error', (req, res) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Triggering type error',
+    category: 'debug.type',
+    level: 'error'
+  });
+  
+  try {
+    // Common Node.js type errors
+    const data = { name: 'test' };
+    
+    // Try to call a non-function
+    data.name(); // TypeError: data.name is not a function
+    
+  } catch (error) {
+    Sentry.captureException(error);
+    throw error; // Re-throw to trigger error handler
+  }
+});
+
+app.get('/debug/async-error', async (req, res, next) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Triggering async error',
+    category: 'debug.async',
+    level: 'error'
+  });
+  
+  // Async function that throws
+  async function failingAsyncOperation() {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    throw new Error('Async operation failed in payment service');
+  }
+  
+  // Call without try/catch to demonstrate error handling
+  await failingAsyncOperation();
+  
+  // This line won't be reached
+  res.json({ status: 'ok' });
+});
+
+app.get('/debug/database-error', async (req, res) => {
+  // Add breadcrumb
+  Sentry.addBreadcrumb({
+    message: 'Triggering database error',
+    category: 'debug.database',
+    level: 'error'
+  });
+  
+  try {
+    // Try to use an invalid MongoDB operation
+    const result = await db.collection('payments').findOne({
+      $invalidOperator: { field: 'value' } // This will fail
+    });
+  } catch (error) {
+    // Add database context
+    Sentry.withScope(scope => {
+      scope.setContext('database_error', {
+        operation: 'findOne',
+        collection: 'payments',
+        error_code: error.code,
+        error_name: error.name
+      });
+      Sentry.captureException(error);
+    });
+    
+    res.status(500).json({
+      error: 'Database operation failed',
+      details: error.message
+    });
+  }
+});
+
 // IMPORTANT: setupExpressErrorHandler must be AFTER all routes but BEFORE other error handlers
 Sentry.setupExpressErrorHandler(app);
 

@@ -5,10 +5,15 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import sys
+import psutil
+import asyncio
+import threading
+import gc
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from pydantic import BaseModel, ValidationError
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -925,6 +930,285 @@ async def get_financial_metrics(hours: int = 24):
         print(f"Error in financial metrics: {str(e)}")
         sentry_sdk.capture_exception(e)
         raise HTTPException(status_code=500, detail=str(e))
+
+# Debug endpoints for crash demonstrations
+@app.get("/api/debug/crash")
+async def debug_crash():
+    """Trigger an unhandled exception for Sentry demo"""
+    # Add breadcrumbs
+    sentry_sdk.add_breadcrumb(
+        message="User accessed debug crash endpoint",
+        category="debug",
+        level="info",
+        data={
+            "endpoint": "/api/debug/crash",
+            "service": "analytics-service"
+        }
+    )
+    
+    # Set user context
+    sentry_sdk.set_user({
+        "id": "debug-analytics-user",
+        "username": "analytics_tester"
+    })
+    
+    # Add runtime context
+    process = psutil.Process()
+    sentry_sdk.set_context("runtime", {
+        "memory_mb": process.memory_info().rss / 1024 / 1024,
+        "cpu_percent": process.cpu_percent(interval=0.1),
+        "threads": process.num_threads(),
+        "python_version": sys.version,
+        "fastapi_version": FastAPI.__version__ if hasattr(FastAPI, '__version__') else "unknown"
+    })
+    
+    # Trigger crash
+    raise RuntimeError("[DEMO] Analytics Service crash triggered! This demonstrates FastAPI error tracking with rich context.")
+
+@app.get("/api/debug/validation-error")
+async def debug_validation_error():
+    """Trigger a Pydantic validation error"""
+    
+    class StrictModel(BaseModel):
+        user_id: str
+        age: int
+        email: str
+        
+    # Add breadcrumb
+    sentry_sdk.add_breadcrumb(
+        message="Attempting to validate invalid data",
+        category="debug.validation",
+        level="warning",
+        data={
+            "model": "StrictModel",
+            "invalid_data": {"user_id": 123, "age": "not_a_number", "email": "invalid"}
+        }
+    )
+    
+    # This will raise ValidationError
+    try:
+        model = StrictModel(user_id=123, age="not_a_number", email="invalid")
+    except ValidationError as e:
+        # Add context before re-raising
+        sentry_sdk.set_context("validation_error", {
+            "errors": e.errors(),
+            "error_count": e.error_count()
+        })
+        raise
+
+@app.get("/api/debug/database-error")
+async def debug_database_error():
+    """Trigger various MongoDB errors"""
+    # Add breadcrumb
+    sentry_sdk.add_breadcrumb(
+        message="Starting database error simulation",
+        category="debug.database",
+        level="error"
+    )
+    
+    try:
+        # Try invalid aggregation pipeline
+        with sentry_sdk.start_span(op="db.aggregate", description="Invalid aggregation") as span:
+            span.set_data("db.system", "mongodb")
+            span.set_data("error.type", "invalid_pipeline")
+            
+            # This will fail - $invalidOperator doesn't exist
+            result = list(db.games.aggregate([
+                {"$match": {"user_id": "test"}},
+                {"$invalidOperator": {"field": "value"}}
+            ]))
+            
+    except Exception as e:
+        # Add database context
+        sentry_sdk.set_context("database_error", {
+            "operation": "aggregation",
+            "pipeline_stage": "$invalidOperator",
+            "collection": "games"
+        })
+        raise
+
+@app.get("/api/debug/timeout")
+async def debug_timeout():
+    """Simulate a request timeout"""
+    # Add breadcrumb
+    sentry_sdk.add_breadcrumb(
+        message="Starting timeout simulation",
+        category="debug.timeout",
+        level="warning",
+        data={"timeout_seconds": 5}
+    )
+    
+    # Set context
+    sentry_sdk.set_context("timeout_context", {
+        "intended_duration": 10,
+        "timeout_after": 5,
+        "operation": "long_running_analysis"
+    })
+    
+    try:
+        # This will timeout
+        await asyncio.wait_for(
+            asyncio.sleep(10),  # Try to sleep for 10 seconds
+            timeout=5.0  # But timeout after 5
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Analytics operation timed out after 5 seconds"
+        )
+
+@app.get("/api/debug/memory-spike")
+async def debug_memory_spike():
+    """Create a memory spike to demonstrate memory profiling"""
+    # Get initial memory
+    process = psutil.Process()
+    initial_memory = process.memory_info().rss / 1024 / 1024
+    
+    # Add breadcrumb
+    sentry_sdk.add_breadcrumb(
+        message="Creating memory spike",
+        category="debug.memory",
+        level="warning",
+        data={"initial_memory_mb": initial_memory}
+    )
+    
+    # Create large data structures
+    large_data = []
+    for i in range(5):
+        # Create 10MB of data each iteration
+        data = 'X' * (10 * 1024 * 1024)
+        large_data.append(data)
+        
+        # Also create some complex objects
+        complex_data = {
+            f"key_{j}": [k for k in range(1000)]
+            for j in range(1000)
+        }
+        large_data.append(complex_data)
+    
+    # Get final memory
+    final_memory = process.memory_info().rss / 1024 / 1024
+    memory_increase = final_memory - initial_memory
+    
+    # Log the spike
+    sentry_sdk.set_context("memory_spike", {
+        "initial_memory_mb": initial_memory,
+        "final_memory_mb": final_memory,
+        "increase_mb": memory_increase,
+        "allocated_chunks": len(large_data)
+    })
+    
+    # Clean up
+    del large_data
+    gc.collect()
+    
+    # Capture a message
+    sentry_sdk.capture_message(
+        f"Memory spike demo: {memory_increase:.2f}MB increase",
+        level="warning"
+    )
+    
+    return {
+        "status": "Memory spike created and cleaned",
+        "memory_increase_mb": memory_increase,
+        "final_memory_mb": final_memory
+    }
+
+@app.get("/api/debug/slow-query")
+async def debug_slow_query():
+    """Demonstrate a slow database query"""
+    # Add breadcrumb
+    sentry_sdk.add_breadcrumb(
+        message="Executing intentionally slow query",
+        category="debug.performance",
+        level="info"
+    )
+    
+    with sentry_sdk.start_span(op="db.aggregate", description="Slow aggregation query") as span:
+        span.set_data("db.system", "mongodb")
+        span.set_tag("performance.issue", "slow_query")
+        
+        # Complex aggregation without indexes
+        pipeline = [
+            # Full collection scan
+            {"$match": {"timestamp": {"$exists": True}}},
+            
+            # Expensive computation
+            {
+                "$addFields": {
+                    "computed_value": {
+                        "$multiply": [
+                            {"$sin": "$bet"},
+                            {"$cos": "$payout"},
+                            {"$log": ["$bet", 10]}
+                        ]
+                    }
+                }
+            },
+            
+            # Multiple lookups (simulated joins)
+            {
+                "$lookup": {
+                    "from": "games",
+                    "let": {"userId": "$user_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$user_id", "$$userId"]}}},
+                        {"$limit": 100}
+                    ],
+                    "as": "user_history"
+                }
+            },
+            
+            # Unwind the array (creates many documents)
+            {"$unwind": "$user_history"},
+            
+            # Group back with calculations
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "total": {"$sum": "$computed_value"},
+                    "count": {"$sum": 1},
+                    "avg": {"$avg": "$computed_value"}
+                }
+            },
+            
+            # Sort without index
+            {"$sort": {"total": -1}},
+            
+            {"$limit": 10}
+        ]
+        
+        start_time = time.time()
+        result = list(db.games.aggregate(pipeline, allowDiskUse=True))
+        duration = time.time() - start_time
+        
+        span.set_data("query_duration_seconds", duration)
+        span.set_data("result_count", len(result))
+        
+        return {
+            "status": "Slow query completed",
+            "duration_seconds": duration,
+            "result_count": len(result),
+            "performance_impact": "This query performed a full collection scan with complex computations"
+        }
+
+# Error handler for unhandled exceptions
+@app.exception_handler(Exception)
+async def custom_exception_handler(request, exc):
+    """Enhanced exception handler with context"""
+    # Add request context
+    sentry_sdk.set_context("request", {
+        "url": str(request.url),
+        "method": request.method,
+        "headers": dict(request.headers),
+        "client": request.client.host if request.client else None
+    })
+    
+    # Capture the exception
+    sentry_sdk.capture_exception(exc)
+    
+    # Return error response
+    return {"error": str(exc), "type": type(exc).__name__}, 500
 
 if __name__ == "__main__":
     import uvicorn

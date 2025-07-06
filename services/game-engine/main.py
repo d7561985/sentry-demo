@@ -4,6 +4,11 @@ import time
 import random
 import logging
 import numpy as np
+import psutil
+import asyncio
+import threading
+import traceback
+import tornado
 from tornado import web, ioloop
 from pymongo import MongoClient
 import sentry_sdk
@@ -549,11 +554,345 @@ class BusinessMetricsHandler(web.RequestHandler):
                 self.set_status(500)
                 self.write({"error": str(e)})
 
+class DebugCrashHandler(web.RequestHandler):
+    """Trigger various types of crashes for Sentry demo"""
+    
+    async def get(self):
+        """Unhandled exception demo"""
+        # Add breadcrumbs to track user actions
+        sentry_sdk.add_breadcrumb(
+            message="User accessed debug crash endpoint",
+            category="debug",
+            level="info",
+            data={
+                "endpoint": self.request.path,
+                "method": self.request.method,
+                "user_ip": self.request.remote_ip
+            }
+        )
+        
+        # Set user context
+        sentry_sdk.set_user({
+            "id": "debug-user",
+            "ip_address": self.request.remote_ip
+        })
+        
+        # Add custom context about system state
+        process = psutil.Process()
+        sentry_sdk.set_context("runtime", {
+            "memory_mb": process.memory_info().rss / 1024 / 1024,
+            "cpu_percent": process.cpu_percent(interval=0.1),
+            "threads": process.num_threads(),
+            "python_version": os.sys.version,
+            "tornado_version": tornado.version
+        })
+        
+        # Trigger crash
+        raise RuntimeError("[DEMO] Game Engine crash triggered! This demonstrates Python error tracking with rich context.")
+    
+class DebugErrorHandler(web.RequestHandler):
+    """Trigger different error types"""
+    
+    async def get(self, error_type):
+        """Trigger specific error types"""
+        # Add breadcrumb
+        sentry_sdk.add_breadcrumb(
+            message=f"Triggering {error_type} error",
+            category="debug",
+            level="warning",
+            data={"error_type": error_type}
+        )
+        
+        # Set tags for error grouping
+        sentry_sdk.set_tag("error.type", error_type)
+        sentry_sdk.set_tag("debug.demo", "true")
+        
+        if error_type == "value":
+            # ValueError demo
+            invalid_data = "not_a_number"
+            sentry_sdk.add_breadcrumb(
+                message="Attempting to convert invalid data",
+                category="debug",
+                data={"value": invalid_data}
+            )
+            int(invalid_data)  # This will raise ValueError
+            
+        elif error_type == "type":
+            # TypeError demo
+            data = {"key": "value"}
+            sentry_sdk.add_breadcrumb(
+                message="Attempting invalid operation",
+                category="debug", 
+                data={"operation": "len() on dict"}
+            )
+            len(data())  # This will raise TypeError
+            
+        elif error_type == "index":
+            # IndexError demo
+            items = [1, 2, 3]
+            sentry_sdk.add_breadcrumb(
+                message="Accessing out of bounds index",
+                category="debug",
+                data={"list_length": len(items), "accessing_index": 10}
+            )
+            return items[10]  # This will raise IndexError
+            
+        elif error_type == "key":
+            # KeyError demo
+            data = {"name": "test"}
+            sentry_sdk.add_breadcrumb(
+                message="Accessing missing dictionary key",
+                category="debug",
+                data={"available_keys": list(data.keys()), "requested_key": "missing"}
+            )
+            return data["missing"]  # This will raise KeyError
+            
+        elif error_type == "zero":
+            # ZeroDivisionError demo
+            numerator = 100
+            denominator = 0
+            sentry_sdk.add_breadcrumb(
+                message="Attempting division by zero",
+                category="debug",
+                data={"numerator": numerator, "denominator": denominator}
+            )
+            return numerator / denominator  # This will raise ZeroDivisionError
+            
+        elif error_type == "custom":
+            # Custom exception with extra context
+            class GameEngineError(Exception):
+                """Custom game engine error"""
+                def __init__(self, message, error_code, context):
+                    super().__init__(message)
+                    self.error_code = error_code
+                    self.context = context
+            
+            raise GameEngineError(
+                "Custom game engine error for demo",
+                error_code="GAME_001",
+                context={"game_state": "active", "session_id": "12345"}
+            )
+        
+        else:
+            self.set_status(400)
+            self.write({"error": f"Unknown error type: {error_type}"})
+            
+class DebugMemoryLeakHandler(web.RequestHandler):
+    """Simulate memory leak"""
+    _memory_leak = []  # Class variable to persist between requests
+    
+    async def get(self):
+        """Create memory leak by accumulating data"""
+        # Add breadcrumb
+        sentry_sdk.add_breadcrumb(
+            message="Starting memory leak simulation",
+            category="debug.memory",
+            level="warning",
+            data={"initial_items": len(self._memory_leak)}
+        )
+        
+        # Get initial memory
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss / 1024 / 1024
+        
+        # Create memory leak - allocate 10MB of data
+        leak_size = 10 * 1024 * 1024  # 10MB
+        data = 'X' * leak_size
+        self._memory_leak.append(data)
+        
+        # Force some CPU usage while we're at it
+        for _ in range(1000000):
+            hash(data)
+        
+        # Get final memory
+        final_memory = process.memory_info().rss / 1024 / 1024
+        memory_increase = final_memory - initial_memory
+        
+        # Log memory growth
+        sentry_sdk.set_context("memory_leak", {
+            "initial_memory_mb": initial_memory,
+            "final_memory_mb": final_memory,
+            "increase_mb": memory_increase,
+            "total_leaked_items": len(self._memory_leak),
+            "total_leaked_mb": len(self._memory_leak) * 10
+        })
+        
+        # Capture a message about the leak
+        sentry_sdk.capture_message(
+            f"Memory leak demo: {memory_increase:.2f}MB increase, total leaked: {len(self._memory_leak) * 10}MB",
+            level="warning"
+        )
+        
+        self.write({
+            "status": "Memory leak created",
+            "memory_increase_mb": memory_increase,
+            "total_leaked_mb": len(self._memory_leak) * 10,
+            "current_memory_mb": final_memory
+        })
+        
+class DebugInfiniteLoopHandler(web.RequestHandler):
+    """Simulate infinite loop / CPU spike"""
+    
+    async def get(self):
+        """Create CPU spike with infinite calculation"""
+        # Add breadcrumb
+        sentry_sdk.add_breadcrumb(
+            message="Starting infinite loop simulation",
+            category="debug.cpu",
+            level="error",
+            data={"warning": "This will spike CPU for 5 seconds"}
+        )
+        
+        # Set context
+        process = psutil.Process()
+        sentry_sdk.set_context("cpu_spike", {
+            "initial_cpu": process.cpu_percent(interval=0.1),
+            "threads": process.num_threads()
+        })
+        
+        # Run CPU-intensive loop for 5 seconds
+        start_time = time.time()
+        iterations = 0
+        
+        while time.time() - start_time < 5:
+            # Intensive calculations
+            for i in range(10000):
+                _ = sum(j**2 for j in range(100))
+                _ = [np.sin(i) * np.cos(i) for _ in range(10)]
+            iterations += 10000
+            
+            # Yield control briefly to avoid blocking
+            if iterations % 100000 == 0:
+                await asyncio.sleep(0.001)
+        
+        # Capture metrics
+        final_cpu = process.cpu_percent(interval=0.1)
+        sentry_sdk.capture_message(
+            f"CPU spike demo completed: {iterations:,} iterations, CPU: {final_cpu}%",
+            level="warning"
+        )
+        
+        self.write({
+            "status": "CPU spike completed",
+            "duration_seconds": 5,
+            "iterations": iterations,
+            "final_cpu_percent": final_cpu
+        })
+        
+class DebugAsyncErrorHandler(web.RequestHandler):
+    """Demonstrate async/await error handling"""
+    
+    async def get(self):
+        """Trigger async errors"""
+        # Add breadcrumb
+        sentry_sdk.add_breadcrumb(
+            message="Starting async error demo",
+            category="debug.async",
+            level="info"
+        )
+        
+        try:
+            # Create multiple async tasks with errors
+            tasks = [
+                self._async_task_success(),
+                self._async_task_failure(),
+                self._async_task_timeout()
+            ]
+            
+            # Wait for all tasks (some will fail)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    sentry_sdk.capture_exception(result)
+                    
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise
+            
+    async def _async_task_success(self):
+        """Successful async task"""
+        await asyncio.sleep(0.1)
+        return "Success"
+        
+    async def _async_task_failure(self):
+        """Failing async task"""
+        await asyncio.sleep(0.2)
+        raise RuntimeError("Async task failed in coroutine")
+        
+    async def _async_task_timeout(self):
+        """Timeout async task"""
+        try:
+            # This will timeout
+            await asyncio.wait_for(asyncio.sleep(10), timeout=0.5)
+        except asyncio.TimeoutError as e:
+            # Re-raise with more context
+            raise RuntimeError("Async operation timed out after 500ms") from e
+
+class DebugThreadingErrorHandler(web.RequestHandler):
+    """Demonstrate threading errors"""
+    
+    def get(self):
+        """Trigger threading errors"""
+        # Add breadcrumb
+        sentry_sdk.add_breadcrumb(
+            message="Starting threading error demo",
+            category="debug.threading",
+            level="warning"
+        )
+        
+        # Create threads that will have errors
+        threads = []
+        
+        def thread_with_error(thread_id):
+            """Thread that will crash"""
+            try:
+                # Set thread-local context
+                sentry_sdk.set_tag("thread.id", str(thread_id))
+                sentry_sdk.add_breadcrumb(
+                    message=f"Thread {thread_id} started",
+                    category="thread"
+                )
+                
+                # Simulate some work
+                time.sleep(0.1 * thread_id)
+                
+                # Trigger error
+                if thread_id == 2:
+                    raise ValueError(f"Thread {thread_id} encountered an error")
+                    
+            except Exception as e:
+                # Capture in thread context
+                sentry_sdk.capture_exception(e)
+                
+        # Start multiple threads
+        for i in range(3):
+            thread = threading.Thread(target=thread_with_error, args=(i,))
+            thread.start()
+            threads.append(thread)
+            
+        # Wait for threads
+        for thread in threads:
+            thread.join()
+            
+        self.write({
+            "status": "Threading demo completed",
+            "threads_created": len(threads)
+        })
+
 def make_app():
     return web.Application([
         (r"/health", HealthHandler),
         (r"/calculate", CalculateHandler),
         (r"/business-metrics", BusinessMetricsHandler),
+        # Debug endpoints
+        (r"/debug/crash", DebugCrashHandler),
+        (r"/debug/error/(.*)", DebugErrorHandler),
+        (r"/debug/memory-leak", DebugMemoryLeakHandler),
+        (r"/debug/infinite-loop", DebugInfiniteLoopHandler),
+        (r"/debug/async-error", DebugAsyncErrorHandler),
+        (r"/debug/threading-error", DebugThreadingErrorHandler),
     ])
 
 if __name__ == "__main__":

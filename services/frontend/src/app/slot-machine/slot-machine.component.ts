@@ -138,6 +138,42 @@ import { environment } from '../../environments/environment';
                 📊 Trigger Slow Analytics
               </button>
             </div>
+            <div class="debug-section">
+              <h4>Service Crashes</h4>
+              <button class="debug-button" (click)="triggerPythonCrash('game-engine')">
+                🎮💥 Game Engine Crash
+              </button>
+              <button class="debug-button" (click)="triggerPythonCrash('analytics')">
+                📊💥 Analytics Crash
+              </button>
+              <button class="debug-button" (click)="triggerNodeCrash()">
+                💳💥 Payment Crash
+              </button>
+            </div>
+            <div class="debug-section">
+              <h4>Memory & Threading</h4>
+              <button class="debug-button" (click)="triggerMemoryLeak('game-engine')">
+                🎮💾 Game Engine Memory Leak
+              </button>
+              <button class="debug-button" (click)="triggerMemoryLeak('payment')">
+                💳💾 Payment Memory Leak
+              </button>
+              <button class="debug-button" (click)="triggerThreadingError()">
+                🧵 Threading Error
+              </button>
+            </div>
+            <div class="debug-section">
+              <h4>Service-Specific Errors</h4>
+              <button class="debug-button" (click)="triggerValidationError()">
+                ✅❌ Validation Error
+              </button>
+              <button class="debug-button" (click)="triggerPromiseRejectionNode()">
+                🤝💥 Payment Promise Rejection
+              </button>
+              <button class="debug-button" (click)="triggerEventLoopBlock()">
+                🔄⏸️ Event Loop Block
+              </button>
+            </div>
             @if (debugStatus) {
               <div class="debug-status">
                 Status: {{ debugStatus }}
@@ -736,6 +772,204 @@ export class SlotMachineComponent implements OnInit {
           setTransactionStatus(span, true);
         } catch (error: any) {
           this.debugStatus = 'Error triggering slow aggregation - is analytics service running?';
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
+        }
+      }
+    );
+  }
+  
+  // New crash demonstration methods
+  async triggerPythonCrash(service: 'game-engine' | 'analytics'): Promise<void> {
+    this.debugStatus = `Triggering ${service} crash...`;
+    
+    await createNewTrace(
+      `debug-${service}-crash`,
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'service-crash');
+          span?.setAttribute('service', service);
+          
+          let url: string;
+          if (service === 'game-engine') {
+            url = `${this.apiUrl}/api/v1/game-engine/debug/crash`;
+          } else {
+            // Analytics endpoints are already under /api/, so we use the direct proxy
+            url = `${this.apiUrl}/api/v1/analytics/debug/crash`;
+          }
+          
+          await firstValueFrom(this.http.get(url));
+          
+          // This shouldn't reach if crash works
+          this.debugStatus = `${service} crash should have occurred - check Sentry!`;
+        } catch (error: any) {
+          if (error.status === 500) {
+            this.debugStatus = `${service} crashed successfully! Check Sentry for RuntimeError.`;
+          } else {
+            this.debugStatus = `Error triggering ${service} crash: ${error.message}`;
+          }
+          setTransactionStatus(span, false, error);
+        }
+      }
+    );
+  }
+  
+  async triggerNodeCrash(): Promise<void> {
+    this.debugStatus = 'Triggering payment service crash...';
+    
+    await createNewTrace(
+      'debug-payment-crash',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'service-crash');
+          span?.setAttribute('service', 'payment');
+          
+          await firstValueFrom(this.http.get(`${this.apiUrl}/api/v1/payment/debug/crash`));
+          
+          this.debugStatus = 'Payment crash should have occurred - check Sentry!';
+        } catch (error: any) {
+          if (error.status === 500) {
+            this.debugStatus = 'Payment service crashed! Check Sentry for Node.js error.';
+          } else {
+            this.debugStatus = `Error triggering payment crash: ${error.message}`;
+          }
+          setTransactionStatus(span, false, error);
+        }
+      }
+    );
+  }
+  
+  async triggerMemoryLeak(service: 'game-engine' | 'payment'): Promise<void> {
+    this.debugStatus = `Creating memory leak in ${service}...`;
+    
+    await createNewTrace(
+      `debug-${service}-memory-leak`,
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'memory-leak');
+          span?.setAttribute('service', service);
+          
+          let url: string;
+          if (service === 'game-engine') {
+            url = `${this.apiUrl}/api/v1/game-engine/debug/memory-leak`;
+          } else {
+            url = `${this.apiUrl}/api/v1/payment/debug/memory-leak`;
+          }
+          
+          const response = await firstValueFrom(this.http.get<any>(url));
+          
+          this.debugStatus = `Memory leak created! ${response.total_leaked_mb || response.estimated_total_leak_mb}MB leaked. Check Sentry.`;
+          span?.setAttribute('memory.leaked_mb', response.total_leaked_mb || response.estimated_total_leak_mb);
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          this.debugStatus = `Error creating memory leak: ${error.message}`;
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
+        }
+      }
+    );
+  }
+  
+  async triggerThreadingError(): Promise<void> {
+    this.debugStatus = 'Triggering threading error in game engine...';
+    
+    await createNewTrace(
+      'debug-threading-error',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'threading-error');
+          
+          const response = await firstValueFrom(
+            this.http.get<any>(`${this.apiUrl}/api/v1/game-engine/debug/threading-error`)
+          );
+          
+          this.debugStatus = `Threading demo completed with ${response.threads_created} threads. Check Sentry!`;
+          span?.setAttribute('threads.created', response.threads_created);
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          this.debugStatus = `Error in threading demo: ${error.message}`;
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
+        }
+      }
+    );
+  }
+  
+  async triggerValidationError(): Promise<void> {
+    this.debugStatus = 'Triggering validation error in analytics...';
+    
+    await createNewTrace(
+      'debug-validation-error',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'validation-error');
+          
+          await firstValueFrom(
+            this.http.get(`${this.apiUrl}/api/v1/analytics/debug/validation-error`)
+          );
+          
+          this.debugStatus = 'Validation error should have occurred - check Sentry!';
+        } catch (error: any) {
+          if (error.status === 422 || error.status === 500) {
+            this.debugStatus = 'Validation error triggered! Check Sentry for Pydantic errors.';
+          } else {
+            this.debugStatus = `Error triggering validation: ${error.message}`;
+          }
+          setTransactionStatus(span, false, error);
+        }
+      }
+    );
+  }
+  
+  async triggerPromiseRejectionNode(): Promise<void> {
+    this.debugStatus = 'Triggering unhandled promise rejection in payment service...';
+    
+    await createNewTrace(
+      'debug-promise-rejection-node',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'promise-rejection');
+          
+          const response = await firstValueFrom(
+            this.http.get<any>(`${this.apiUrl}/api/v1/payment/debug/promise-rejection`)
+          );
+          
+          this.debugStatus = response.status || 'Promise rejection triggered - check Sentry!';
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          this.debugStatus = `Error triggering promise rejection: ${error.message}`;
+          setTransactionStatus(span, false, error);
+          Sentry.captureException(error);
+        }
+      }
+    );
+  }
+  
+  async triggerEventLoopBlock(): Promise<void> {
+    this.debugStatus = 'Blocking event loop in payment service (3 seconds)...';
+    
+    await createNewTrace(
+      'debug-event-loop-block',
+      Operations.DEBUG,
+      async (span) => {
+        try {
+          span?.setAttribute('debug.type', 'event-loop-block');
+          
+          const response = await firstValueFrom(
+            this.http.get<any>(`${this.apiUrl}/api/v1/payment/debug/event-loop-block`)
+          );
+          
+          this.debugStatus = `Event loop blocked for ${response.duration_ms}ms! ${response.warning}`;
+          span?.setAttribute('block.duration_ms', response.duration_ms);
+          setTransactionStatus(span, true);
+        } catch (error: any) {
+          this.debugStatus = `Error blocking event loop: ${error.message}`;
           setTransactionStatus(span, false, error);
           Sentry.captureException(error);
         }

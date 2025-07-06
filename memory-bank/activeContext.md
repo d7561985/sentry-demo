@@ -1,56 +1,66 @@
 # activeContext.md
-Current Phase: REFLECT
-Previous Phase: IMPLEMENT
-Task Focus: N+1 Query Enhancement for Sentry Detection
-Complexity Level: 2
+Current Phase: VAN
+Previous Phase: REFLECT
+Task Focus: Add Crash Demonstration Endpoints for Python and Node.js Services
+Complexity Level: 3
 Start Time: 2025-01-06
-End Time: 2025-01-06
 
-## Current Implementation Status
-### Debug-ID Integration ✅
-- Successfully implemented Sentry debug-ids for source map handling
-- Updated upload-sourcemaps.sh to use debug-id injection approach
-- Created comprehensive documentation for auth token setup
-- Addressed user's PROJECT_ID confusion with clear documentation
-- Created development build script without source map uploads
-- Successfully tested debug-id injection on production build
+## Implementation Complete ✅
 
-## Implementation Details
-### Build Configuration ✅
-- Source maps properly generated with Angular 20 esbuild
-- Debug-ids injected into 4 JavaScript files and their source maps
-- Each file has unique debug-id (e.g., 60e02648-3dc2-50e9-8202-a5f915fd9395)
+### Python Game Engine Service (Tornado)
+Added comprehensive debug endpoints:
+- `/debug/crash` - Unhandled RuntimeError with rich context
+- `/debug/error/{type}` - Various error types (value, type, index, key, zero, custom)
+- `/debug/memory-leak` - Memory leak simulation (10MB per request)
+- `/debug/infinite-loop` - CPU spike for 5 seconds
+- `/debug/async-error` - Async/await error handling demo
+- `/debug/threading-error` - Threading errors with multiple threads
 
-### Documentation Created ✅
-1. **services/frontend/README.md**
-   - Auth token creation steps
-   - PROJECT_ID clarification
-   - CI/CD integration examples
-   - Troubleshooting section
+**Key Features**:
+- Rich runtime context (memory, CPU, threads, Python version)
+- Breadcrumbs for tracking user actions
+- Custom error types with extra context
+- Memory leak tracking with psutil
+- Thread-local context in multi-threaded scenarios
 
-2. **services/frontend/.env.example**
-   - Detailed comments about PROJECT vs folder name
-   - Clear examples of how to find PROJECT slug
+### Python Analytics Service (FastAPI)
+Added debug endpoints:
+- `/api/debug/crash` - Unhandled exception with FastAPI context
+- `/api/debug/validation-error` - Pydantic validation errors
+- `/api/debug/database-error` - MongoDB aggregation errors
+- `/api/debug/timeout` - Async timeout simulation (5s)
+- `/api/debug/memory-spike` - Memory spike creation and cleanup
+- `/api/debug/slow-query` - Intentionally slow MongoDB query
 
-3. **Main README.md**
-   - Added section for creating Sentry Auth Token
+**Key Features**:
+- FastAPI-specific error handling
+- Pydantic validation error context
+- Database error context with operation details
+- Memory profiling with garbage collection
+- Performance issue demonstrations
+- Custom exception handler with request context
 
-### Scripts Updated ✅
-1. **upload-sourcemaps.sh**
-   - Complete rewrite for debug-id approach
-   - Injection step: `npx @sentry/cli sourcemaps inject`
-   - Upload step: `npx @sentry/cli sourcemaps upload`
+### Node.js Payment Service (Express)
+Added debug endpoints:
+- `/debug/crash` - Uncaught exception with runtime context
+- `/debug/promise-rejection` - Unhandled promise rejection
+- `/debug/memory-leak` - Memory leak with circular references (50MB per request)
+- `/debug/event-loop-block` - Blocks event loop for 3 seconds
+- `/debug/stack-overflow` - Recursive function causing stack overflow
+- `/debug/type-error` - Common Node.js type errors
+- `/debug/async-error` - Async function errors
+- `/debug/database-error` - MongoDB operation errors
 
-2. **build-dev.sh**
-   - Created for development builds without uploads
-   - Addresses user's concern about @start-dev.sh
+**Key Features**:
+- Node.js-specific runtime info (heap, RSS, uptime)
+- Global memory leak tracking
+- Event loop blocking demonstration
+- Stack overflow depth tracking
+- Express error handler integration
 
-## Testing Results
-- Production build: ✅ Successful
-- Debug-id injection: ✅ 4 files modified
-- Source map generation: ✅ All maps include debug_id field
-- Script validation: ✅ Dry run successful (requires auth token)
-
-## Remaining Tasks
-- Test with actual Sentry credentials
-- Verify error tracking works with debug-ids in Sentry dashboard
+## Summary
+- All services now have 100% profiling enabled ✅
+- All services have comprehensive crash/error demos ✅
+- Rich context added to all errors (breadcrumbs, runtime stats, user info) ✅
+- Language-specific error patterns demonstrated ✅
+- Consistent with Go service's error handling quality ✅

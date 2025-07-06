@@ -83,6 +83,12 @@ func main() {
 		api.Any("/analytics/*path", handlers.ProxyToAnalytics(cfg))
 		api.Any("/business-metrics/*path", handlers.ProxyToAnalytics(cfg))
 		
+		// Game engine endpoints - proxy to game engine service (including debug)
+		api.Any("/game-engine/*path", handlers.ProxyToGameEngine(cfg))
+		
+		// Payment endpoints - proxy to payment service (including debug)
+		api.Any("/payment/*path", handlers.ProxyToPayment(cfg))
+		
 		// Trigger panic for demo (Scenario 2)
 		api.GET("/debug/panic/:userId", handlers.TriggerPanic())
 	}
