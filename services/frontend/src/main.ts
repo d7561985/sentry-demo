@@ -1,7 +1,6 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { enableProdMode } from '@angular/core';
 import * as Sentry from '@sentry/angular';
-import { browserProfilingIntegration } from '@sentry-internal/browser-utils';
 
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app.config';
@@ -33,7 +32,7 @@ Sentry.init({
     
     // Экспериментальная функция: Browser Profiling
     // Захватывает профили производительности JavaScript в браузере
-    browserProfilingIntegration(),
+    Sentry.browserProfilingIntegration(),
     
     // Отслеживание производительности для Angular роутинга и HTTP запросов
     Sentry.browserTracingIntegration({
