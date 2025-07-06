@@ -32,17 +32,17 @@ import { GameStateService } from '../services/game-state.service';
     
       <!-- 3 Reels in a Row -->
       <div class="slots-container">
-        @for (reel of reels; track reel; let i = $index) {
+        @for (reel of reels; track i; let i = $index) {
           <div class="slot-window">
             <div class="reel" [class.spinning]="isSpinning()">
               @if (isSpinning()) {
                 <div class="symbol-strip">
-                  @for (symbol of spinningSymbols; track symbol) {
-                    <div class="symbol">{{ symbol }}</div>
+                  @for (symbol of spinningSymbols; track symbol.id) {
+                    <div class="symbol">{{ symbol.value }}</div>
                   }
                   <!-- Duplicate symbols for seamless loop -->
-                  @for (symbol of spinningSymbols; track symbol) {
-                    <div class="symbol">{{ symbol }}</div>
+                  @for (symbol of spinningSymbols; track symbol.id + 100) {
+                    <div class="symbol">{{ symbol.value }}</div>
                   }
                 </div>
               }
@@ -267,6 +267,36 @@ import { GameStateService } from '../services/game-state.service';
       margin-top: 10px;
     }
 
+    /* Stats Panel Styles */
+    .stats-panel {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-around;
+      gap: 20px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 20px;
+      font-weight: bold;
+      color: #4CAF50;
+    }
+
     /* Debug Panel Styles */
     .debug-panel {
       margin-top: 40px;
@@ -348,7 +378,14 @@ export class SlotMachineComponent implements OnInit {
   error: string | null = null;
   userId = 'demo-user-' + Math.floor(Math.random() * 1000);
   reels: string[] = ['🍒', '🍋', '🍊'];
-  spinningSymbols: string[] = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎'];
+  spinningSymbols = [
+    { id: 0, value: '🍒' },
+    { id: 1, value: '🍋' },
+    { id: 2, value: '🍊' },
+    { id: 3, value: '🍇' },
+    { id: 4, value: '⭐' },
+    { id: 5, value: '💎' }
+  ];
   
   // Debug panel properties
   debugPanelOpen = false;
@@ -380,6 +417,9 @@ export class SlotMachineComponent implements OnInit {
 
   async spin(): Promise<void> {
     this.error = null;
+    
+    // Start the spinning animation
+    this.gameState.startSpin();
     
     // Start a NEW span for the spin action using v8 API
     await Sentry.startSpan(
@@ -417,11 +457,20 @@ export class SlotMachineComponent implements OnInit {
                   ];
                 }
                 resolve();
-              }, 2000);
+              }, 2500);
             });
           }
         } catch (error: any) {
           this.error = error.message || 'Something went wrong!';
+          // Stop the spinning animation on error
+          this.gameState.completeSpin({
+            win: false,
+            payout: 0,
+            symbols: [],
+            winAmount: 0,
+            betAmount: 10,
+            newBalance: this.balance()
+          });
           // In v8, error status is automatically set when exception is thrown
           Sentry.captureException(error);
           throw error; // Re-throw to let Sentry handle span status

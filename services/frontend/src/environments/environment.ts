@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  sentryDsn: 'https://722c8d692d3d37bbd5abdd06011cf2fc@o4509537604993024.ingest.de.sentry.io/4509538210349136',
+  sentryDsn: 'https://d438ac686202e2a66a89a98989c66b6a@o4509616118562816.ingest.de.sentry.io/4509616119808080',
   apiUrl: 'http://localhost:8080',
-  version: '1.0.0-dev'
+  version: '1.0.6-dev'
 };

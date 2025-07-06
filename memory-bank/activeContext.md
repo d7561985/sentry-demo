@@ -1,10 +1,9 @@
 # activeContext.md
-Current Phase: IMPLEMENT
-Previous Phase: CREATIVE
-Task Focus: Update Angular frontend to latest version - COMPLETED ✅
-Complexity Level: 3
+Current Phase: VAN
+Previous Phase: IMPLEMENT
+Task Focus: Fix Angular animation and Sentry Session Replay issues
+Complexity Level: 1
 Start Time: 2025-01-05
-Completion Time: 2025-01-05
 
 ## Completed Work
 ### Angular 13 → 20 Sequential Migration ✅
@@ -27,3 +26,14 @@ Completion Time: 2025-01-05
 - **Templates**: Using @defer for lazy loading, new control flow syntax
 - **Build**: Optimized with lazy loading, inline critical CSS
 - **All tasks completed successfully!**
+
+## New Issues Analysis (VAN Phase)
+### Animation Issue Fixed ✅
+- Increased animation duration from 0.8s to 2s to match visual expectation
+- Extended setTimeout from 2000ms to 2500ms to ensure animation completes
+- Animation now properly syncs with isSpinning signal
+
+### Session Replay Fixed ✅  
+- Added `sendDefaultPii: true` to Sentry configuration (required for Session Replay)
+- Session Replay was already at v9.35.0 with proper configuration
+- All replay settings properly configured for demo purposes

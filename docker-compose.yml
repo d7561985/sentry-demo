@@ -36,7 +36,12 @@ services:
 
   # Frontend
   frontend:
-    build: ./services/frontend
+    build:
+      context: ./services/frontend
+      args:
+        SENTRY_DSN: ${SENTRY_FRONTEND_DSN:-https://d438ac686202e2a66a89a98989c66b6a@o4509616118562816.ingest.de.sentry.io/4509616119808080}
+        API_URL: ${API_URL:-http://localhost:8080}
+        APP_VERSION: ${APP_VERSION:-1.0.0}
     container_name: sentry-poc-frontend
     ports:
       - "4200:4200"

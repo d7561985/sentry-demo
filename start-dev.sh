@@ -1,12 +1,26 @@
 #!/bin/bash
 
+# Increment version
+source ./scripts/increment-version.sh
+CURRENT_VERSION=$(cat .version)
+
 echo "🚀 Starting Sentry POC in DEVELOPMENT mode..."
+echo "📝 Version: $CURRENT_VERSION"
 echo "📝 This mode includes:"
 echo "  - Source maps with full debugging"
 echo "  - Hot reload for frontend"
 echo "  - Debug logging enabled"
 echo "  - Development environment settings"
 echo ""
+
+# Generate environment files with new version
+echo "📝 Generating environment files with version $CURRENT_VERSION..."
+cd services/frontend
+APP_VERSION=$CURRENT_VERSION node scripts/generate-env.js
+cd ../..
+
+# Export version for docker-compose
+export APP_VERSION=$CURRENT_VERSION
 
 # Start services with dev overrides
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d

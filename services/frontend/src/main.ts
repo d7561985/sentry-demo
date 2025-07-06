@@ -9,7 +9,10 @@ import { environment } from './environments/environment';
 // Initialize Sentry SDK v9 with Session Replay
 Sentry.init({
   dsn: environment.sentryDsn,
-  release: (environment as any).version || '1.0.0',
+  release: environment.version || '1.0.0',
+  // Setting this option to true will send default PII data to Sentry.
+  // For example, automatic IP address collection on events
+  sendDefaultPii: true,
   integrations: [
     // BrowserTracing integration for Angular
     Sentry.browserTracingIntegration(),
