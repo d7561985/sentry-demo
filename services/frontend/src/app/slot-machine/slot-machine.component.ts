@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/angular';
 import { GameService } from '../services/game.service';
 import { GameStateService } from '../services/game-state.service';
 import { BonusTrackerComponent } from '../components/bonus-tracker.component';
+import { BonusRefreshService } from '../services/bonus-refresh.service';
 import { 
   createNewTrace, 
   TransactionNames, 
@@ -462,7 +463,8 @@ export class SlotMachineComponent implements OnInit {
   constructor(
     private gameService: GameService,
     private gameState: GameStateService,
-    private http: HttpClient
+    private http: HttpClient,
+    private bonusRefreshService: BonusRefreshService
   ) {}
   
   get apiUrl(): string {
@@ -525,6 +527,10 @@ export class SlotMachineComponent implements OnInit {
                   betAmount: 10,
                   newBalance: result.newBalance
                 });
+                
+                // Trigger bonus refresh after successful spin
+                this.bonusRefreshService.triggerRefresh();
+                
                 resolve();
               }, 800); // One animation cycle (matching CSS animation duration)
             });

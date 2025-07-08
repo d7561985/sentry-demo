@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { interval, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { createNewTrace } from '../utils/sentry-traces';
+import { BonusRefreshService } from '../services/bonus-refresh.service';
 
 interface BonusProgress {
   has_active_bonus: boolean;
@@ -314,13 +315,17 @@ export class BonusTrackerComponent implements OnInit, OnDestroy {
     return localStorage.getItem('userId') || 'demo-user-1';
   });
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private bonusRefreshService: BonusRefreshService
+  ) {}
 
   ngOnInit() {
+    // Load initial state
     this.loadBonusProgress();
     
-    // Refresh every 5 seconds
-    interval(5000)
+    // Listen for refresh requests instead of using timer
+    this.bonusRefreshService.refreshRequested$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         if (!this.converting() && !this.claiming()) {
@@ -387,6 +392,7 @@ export class BonusTrackerComponent implements OnInit, OnDestroy {
             .subscribe({
               next: () => {
                 this.claiming.set(false);
+                // Reload immediately after successful claim
                 this.loadBonusProgress();
                 resolve(true);
               },
@@ -416,6 +422,7 @@ export class BonusTrackerComponent implements OnInit, OnDestroy {
             .subscribe({
               next: () => {
                 this.converting.set(false);
+                // Reload immediately after successful conversion
                 this.loadBonusProgress();
                 if (span) {
                   span.setAttribute('bonus.converted', true);
