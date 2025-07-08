@@ -86,6 +86,57 @@ func Spin(cfg *config.Config) gin.HandlerFunc {
 			Transport: &sentryRoundTripper{},
 		}
 
+		// First, validate wager with wager service
+		wagerSpan := sentry.StartSpan(ctx, "http.client", sentry.WithDescription("POST wager-service:/validate"))
+		wagerCtx := wagerSpan.Context()
+		
+		wagerValidateReq := map[string]interface{}{
+			"user_id": req.UserID,
+			"amount": req.Bet,
+			"game_id": "slot-machine",
+		}
+		
+		wagerBody, _ := json.Marshal(wagerValidateReq)
+		wagerHttpReq, err := http.NewRequestWithContext(wagerCtx, "POST", cfg.WagerServiceURL+"/api/wager/validate", bytes.NewBuffer(wagerBody))
+		if err != nil {
+			wagerSpan.Status = sentry.SpanStatusInternalError
+			wagerSpan.Finish()
+			c.JSON(500, gin.H{"error": "Failed to create wager validation request"})
+			return
+		}
+		
+		wagerHttpReq.Header.Set("Content-Type", "application/json")
+		
+		wagerResp, err := client.Do(wagerHttpReq)
+		if err != nil {
+			wagerSpan.Status = sentry.SpanStatusInternalError
+			wagerSpan.Finish()
+			sentry.CaptureException(err)
+			c.JSON(500, gin.H{"error": "Wager service unavailable"})
+			return
+		}
+		defer wagerResp.Body.Close()
+		
+		if wagerResp.StatusCode != 200 {
+			wagerSpan.Status = sentry.SpanStatusFailedPrecondition
+			wagerSpan.Finish()
+			bodyBytes, _ := io.ReadAll(wagerResp.Body)
+			c.JSON(wagerResp.StatusCode, gin.H{"error": string(bodyBytes)})
+			return
+		}
+		
+		// Parse validation response
+		var wagerValidationData map[string]interface{}
+		if err := json.NewDecoder(wagerResp.Body).Decode(&wagerValidationData); err != nil {
+			wagerSpan.Status = sentry.SpanStatusInternalError
+			wagerSpan.Finish()
+			c.JSON(500, gin.H{"error": "Failed to parse wager validation response"})
+			return
+		}
+		
+		wagerSpan.Status = sentry.SpanStatusOK
+		wagerSpan.Finish()
+
 		// Forward to game engine
 		gameSpan := sentry.StartSpan(ctx, "http.client", sentry.WithDescription("POST game-engine:/spin"))
 		gameCtx := gameSpan.Context()
@@ -178,6 +229,41 @@ func Spin(cfg *config.Config) gin.HandlerFunc {
 
 		// Update game result with new balance
 		gameResult["newBalance"] = paymentResult["newBalance"]
+
+		// Record wager in wager service
+		wagerRecordSpan := sentry.StartSpan(ctx, "http.client", sentry.WithDescription("POST wager-service:/place"))
+		wagerRecordCtx := wagerRecordSpan.Context()
+		
+		gameResultStr := "lose"
+		if win {
+			gameResultStr = "win"
+		}
+		
+		wagerPlaceReq := map[string]interface{}{
+			"validation_data": wagerValidationData, // Use the actual validation response
+			"game_result":     gameResultStr,
+			"payout":          payout,
+		}
+		
+		wagerPlaceBody, _ := json.Marshal(wagerPlaceReq)
+		wagerPlaceHttpReq, err := http.NewRequestWithContext(wagerRecordCtx, "POST", cfg.WagerServiceURL+"/api/wager/place", bytes.NewBuffer(wagerPlaceBody))
+		if err == nil {
+			wagerPlaceHttpReq.Header.Set("Content-Type", "application/json")
+			wagerPlaceResp, err := client.Do(wagerPlaceHttpReq)
+			if err != nil {
+				// Log error but don't fail the request
+				sentry.CaptureException(err)
+				wagerRecordSpan.Status = sentry.SpanStatusInternalError
+			} else {
+				wagerPlaceResp.Body.Close()
+				if wagerPlaceResp.StatusCode == 200 {
+					wagerRecordSpan.Status = sentry.SpanStatusOK
+				} else {
+					wagerRecordSpan.Status = sentry.SpanStatusInternalError
+				}
+			}
+		}
+		wagerRecordSpan.Finish()
 
 		// Add custom tags
 		if span != nil {

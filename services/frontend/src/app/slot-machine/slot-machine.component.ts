@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import * as Sentry from '@sentry/angular';
 import { GameService } from '../services/game.service';
 import { GameStateService } from '../services/game-state.service';
+import { BonusTrackerComponent } from '../components/bonus-tracker.component';
 import { 
   createNewTrace, 
   TransactionNames, 
@@ -16,7 +17,7 @@ import { environment } from '../../environments/environment';
 @Component({
     selector: 'app-slot-machine',
     standalone: true,
-    imports: [CommonModule],
+    imports: [CommonModule, BonusTrackerComponent],
     template: `
     <div class="slot-machine">
       <h2>🎰 Simple Slot Machine</h2>
@@ -25,6 +26,9 @@ import { environment } from '../../environments/environment';
       <div class="balance">
         Balance: $<span>{{balance()}}</span>
       </div>
+      
+      <!-- Bonus Tracker Component -->
+      <app-bonus-tracker></app-bonus-tracker>
       
       <!-- Statistics Panel -->
       @if (totalSpins() > 0) {
@@ -466,6 +470,9 @@ export class SlotMachineComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Save userId to localStorage for other components
+    localStorage.setItem('userId', this.userId);
+    
     // Set user context for Sentry
     Sentry.setUser({
       id: this.userId,

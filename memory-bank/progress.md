@@ -187,3 +187,128 @@ Successfully migrated Angular application from v13.3.0 to v20.0.6 with:
 - **Archive Document**: `/docs/archive/tasks/sentry-independent-traces-20250106.md`
 - **Reflection Document**: `/memory-bank/reflect-sentry-traces-2025-01-06.md`
 - **Status**: ARCHIVED ✅
+
+---
+
+## 2025-01-07: PHP/Symfony Wager Service Implementation
+
+### Phase 1: Foundation Setup ✅
+- **Date**: 2025-01-07
+- **Directory Structure Created**:
+  - `/services/wager-service/src/Controller/` - REST endpoints
+  - `/services/wager-service/src/Service/` - Business logic
+  - `/services/wager-service/src/Document/` - MongoDB ODM entities
+  - `/services/wager-service/src/Exception/` - Custom exceptions
+  - `/services/wager-service/src/EventSubscriber/` - Sentry integration
+  - `/services/wager-service/config/` - Symfony configuration
+  - `/services/wager-service/docker/` - Docker configurations
+
+### Phase 2: Core Components Implemented ✅
+- **MongoDB Documents**:
+  - `UserBonus.php` - Main user bonus state with embedded ActiveBonus
+  - `WagerHistory.php` - Complete wager audit trail with balance snapshots
+  - `BonusConversion.php` - Completed bonus conversion records
+  
+- **Services**:
+  - `BonusService.php` - Bonus claiming, conversion, progress tracking
+  - `WagerService.php` - Wager validation, recording, balance management
+  - `IntegrationService.php` - External service communication
+  
+- **Controllers**:
+  - `BonusController.php` - Bonus API endpoints with Sentry context
+  - `WagerController.php` - Wager API endpoints with performance tracking
+  - `HealthController.php` - Health check endpoint
+  
+- **Sentry Integration**:
+  - `SentrySubscriber.php` - Request/response tracking, metrics, error context
+  - Custom business metrics (bonus claims, wagering progress, conversion rates)
+  - Distributed tracing support with trace propagation
+  - Performance monitoring with slow request detection
+
+### Phase 3: Configuration ✅
+- **Symfony Configuration**:
+  - `composer.json` - Dependencies including Symfony 7.1, MongoDB ODM, Sentry
+  - `services.yaml` - Service configuration with environment variables
+  - `framework.yaml` - Framework settings
+  - `doctrine_mongodb.yaml` - MongoDB connection and mapping
+  - `sentry.yaml` - Sentry SDK configuration with tracing
+
+- **Docker Setup**:
+  - `Dockerfile` - PHP 8.2 with MongoDB extension, nginx, supervisor
+  - `php.ini` - PHP configuration with OPcache
+  - `nginx.conf` - Nginx configuration for PHP-FPM
+  - `supervisord.conf` - Process management
+  - `docker-compose.yml` - Service orchestration
+
+### Implementation Features
+- **Atomic Operations**: All balance updates use MongoDB atomic operators
+- **Optimistic Locking**: Version field prevents concurrent modifications
+- **Progressive Wagering**: Real-time progress tracking with O(1) performance
+- **Audit Trail**: Complete history in separate collection for analytics
+- **Error Scenarios**: Intentional demo errors for Sentry demonstration
+- **Performance Issues**: Demo methods for N+1, slow queries, memory leaks
+
+### API Endpoints
+- `POST /api/bonus/claim` - Claim a new bonus
+- `GET /api/bonus/progress/{userId}` - Check wagering progress
+- `POST /api/bonus/convert/{userId}` - Convert completed bonus
+- `POST /api/wager/validate` - Validate wager attempt
+- `POST /api/wager/place` - Place a wager
+- `POST /api/wager/result` - Process game result
+- `GET /api/wager/history/{userId}` - Get wager history
+- `GET /health` - Health check
+
+### Next Steps
+- Add integration with API Gateway
+- Create demo scenarios for Sentry
+- Add frontend integration
+- Implement caching layer
+- Add more performance monitoring
+
+### Status: Core Implementation Complete ✅
+
+---
+
+## 2025-01-07: Wager Service Integration
+
+### Integration Tasks Completed ✅
+
+1. **API Gateway Configuration**
+   - Added proxy handler for Wager Service in `/services/api-gateway/internal/handlers/wager.go`
+   - Added WagerServiceURL to config structure
+   - Added routes for `/api/v1/wager/*` and `/api/v1/bonus/*`
+   - Updated docker-compose.yml with WAGER_SERVICE_URL environment variable
+
+2. **User Service Integration**
+   - Added `claimWelcomeBonus` method to call Wager Service API
+   - Updated `GetBalance` to claim bonus for new users
+   - Added distributed tracing headers propagation
+   - Updated docker-compose.yml with WAGER_SERVICE_URL
+
+3. **Frontend Integration**
+   - Created `BonusTrackerComponent` with real-time progress tracking
+   - Integrated component into SlotMachineComponent
+   - Added bonus progress visualization with percentage bar
+   - Added claim and convert bonus functionality
+
+4. **Spin Flow Integration**
+   - Updated spin handler to validate wagers before game
+   - Added wager recording after game result
+   - Integrated with distributed tracing
+
+### Docker Build Issues - RESOLVED ✅
+- ✅ MongoDB extension: Upgraded to doctrine/mongodb-odm-bundle 5.0 (supports ext-mongodb 2.1.1)
+- ✅ Sentry bundle: Fixed configuration for SDK 4.x (removed deprecated integrations)
+- ✅ Symfony version: Upgraded to 7.3.* (latest stable)
+- ✅ Build successful: Docker image built successfully
+
+### Integration Architecture
+```
+Frontend → API Gateway → Wager Service
+                     ↓
+              User Service → Wager Service (bonus claim)
+                     ↓
+              Game Engine → API Gateway → Wager Service (validation/recording)
+```
+
+### Status: Integration Complete, Docker Build Pending ⚠️

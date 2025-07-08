@@ -9,6 +9,7 @@ type Config struct {
 	UserServiceURL   string
 	GameServiceURL   string
 	PaymentServiceURL string
+	WagerServiceURL  string
 	RedisURL         string
 }
 
@@ -18,6 +19,7 @@ func Load() *Config {
 		UserServiceURL:    getEnv("USER_SERVICE_URL", "http://user-service:8081"),
 		GameServiceURL:    getEnv("GAME_SERVICE_URL", "http://game-engine:8082"),
 		PaymentServiceURL: getEnv("PAYMENT_SERVICE_URL", "http://payment-service:8083"),
+		WagerServiceURL:   getEnv("WAGER_SERVICE_URL", "http://wager-service:8085"),
 		RedisURL:          getEnv("REDIS_URL", "localhost:6379"),
 	}
 }

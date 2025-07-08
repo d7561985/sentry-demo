@@ -89,6 +89,10 @@ func main() {
 		// Payment endpoints - proxy to payment service (including debug)
 		api.Any("/payment/*path", handlers.ProxyToPayment(cfg))
 		
+		// Wager endpoints - proxy to wager service (including bonus endpoints)
+		api.Any("/wager/*path", handlers.ProxyToWager(cfg))
+		api.Any("/bonus/*path", handlers.ProxyToWager(cfg))
+		
 		// Trigger panic for demo (Scenario 2)
 		api.GET("/debug/panic/:userId", handlers.TriggerPanic())
 	}

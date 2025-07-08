@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -26,6 +29,59 @@ func NewUserHandler(mongoClient *mongo.Client, redisClient *redis.Client) *UserH
 		mongoClient: mongoClient,
 		redisClient: redisClient,
 	}
+}
+
+// claimWelcomeBonus calls the wager service to claim welcome bonus for a new user
+func (h *UserHandler) claimWelcomeBonus(ctx context.Context, userID string) error {
+	// Get wager service URL from environment
+	wagerServiceURL := os.Getenv("WAGER_SERVICE_URL")
+	if wagerServiceURL == "" {
+		wagerServiceURL = "http://wager-service:8085"
+	}
+
+	// Create request payload
+	payload := map[string]interface{}{
+		"user_id":    userID,
+		"bonus_type": "WELCOME",
+		"amount":     100.0,
+		"multiplier": 30,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", wagerServiceURL+"/api/bonus/claim", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add Sentry trace headers for distributed tracing
+	if span := sentry.SpanFromContext(ctx); span != nil {
+		req.Header.Set("sentry-trace", span.ToSentryTrace())
+		if baggage := span.ToBaggage(); baggage != "" {
+			req.Header.Set("baggage", baggage)
+		}
+	}
+
+	// Make the request
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call wager service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("wager service returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (h *UserHandler) GetBalance(c *gin.Context) {
@@ -75,6 +131,22 @@ func (h *UserHandler) GetBalance(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
+		
+		// Claim welcome bonus for new user
+		bonusSpan := span.StartChild("http.client")
+		bonusSpan.Description = "Claim welcome bonus"
+		bonusSpan.SetData("http.method", "POST")
+		bonusSpan.SetData("http.url", "/api/bonus/claim")
+		
+		err = h.claimWelcomeBonus(bonusSpan.Context(), userID)
+		if err != nil {
+			// Log error but don't fail the request
+			sentry.CaptureException(err)
+			bonusSpan.Status = sentry.SpanStatusInternalError
+		} else {
+			bonusSpan.Status = sentry.SpanStatusOK
+		}
+		bonusSpan.Finish()
 	} else if err != nil {
 		dbSpan.Status = sentry.SpanStatusInternalError
 		dbSpan.Finish()

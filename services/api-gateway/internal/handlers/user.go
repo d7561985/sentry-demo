@@ -31,7 +31,7 @@ func GetUserBalance(cfg *config.Config) gin.HandlerFunc {
 		userCtx := userSpan.Context()
 		defer userSpan.Finish()
 
-		url := fmt.Sprintf("http://user-service:8084/users/%s/balance", userID)
+		url := fmt.Sprintf("http://user-service:8081/balance/%s", userID)
 		httpReq, err := http.NewRequestWithContext(userCtx, "GET", url, nil)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to create request"})
