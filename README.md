@@ -12,13 +12,14 @@
 
 2. **Создайте проекты в Sentry**:
    - В Sentry Dashboard нажмите "Create Project"
-   - Создайте 6 проектов (по одному для каждого сервиса):
+   - Создайте 7 проектов (по одному для каждого сервиса):
      - `igaming-frontend` (Platform: Browser/JavaScript)
      - `igaming-gateway` (Platform: Go)
      - `igaming-user` (Platform: Go)
      - `igaming-game` (Platform: Python)
      - `igaming-payment` (Platform: Node.js)
      - `igaming-analytics` (Platform: Python)
+     - `igaming-wager` (Platform: PHP)
 
 3. **Получите DSN для каждого проекта**:
    - Откройте каждый проект
@@ -51,6 +52,7 @@
    SENTRY_GAME_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234570
    SENTRY_PAYMENT_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234571
    SENTRY_ANALYTICS_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234572
+   SENTRY_WAGER_DSN=https://YOUR_KEY@o123456.ingest.sentry.io/1234573
    ```
    
    **Frontend .env файл (для source maps)**:
@@ -71,7 +73,25 @@
    ./check-env.sh
    ```
 
-### 2. Запуск сервисов
+### 2. Проверка портов
+
+⚠️ **Важно**: Перед запуском убедитесь, что следующие порты свободны:
+- **27017** - MongoDB
+- **6379** - Redis  
+- **5672, 15672** - RabbitMQ
+- **8080-8086** - Микросервисы
+- **4200** - Frontend
+
+Если порты заняты:
+```bash
+# Проверить занятые порты
+docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -E "27017|6379|5672|8080"
+
+# Остановить конфликтующие контейнеры
+docker stop <container-name>
+```
+
+### 3. Запуск сервисов
 
 #### Production Mode (с оптимизацией и загрузкой source maps)
 ```bash
@@ -272,6 +292,23 @@ curl http://localhost:8080/api/v1/debug/panic/panic-test
 4. Смотрите результаты в Sentry Performance
 
 **Подробная инструкция**: [docs/scenario-3-performance-demo.md](docs/scenario-3-performance-demo.md)
+
+## 🆕 Новые возможности в POC
+
+### Wager Service (PHP/Symfony)
+- **Технологии**: PHP 8.1+, Symfony 5.4 LTS, MongoDB с Doctrine ODM
+- **Sentry демо**: Медленные aggregations, валидация бонусов, бизнес-метрики
+- **Порт**: 8086 (Swagger UI: http://localhost:8086/api/doc)
+
+### Улучшенная обработка ошибок
+- Детальные crash демонстрации для всех сервисов
+- Panic recovery в Go сервисах
+- Structured logging с контекстом
+
+### Debug панель в Frontend
+- Быстрый доступ ко всем демо-сценариям
+- Триггеры для различных типов ошибок
+- Performance проблемы по кнопке
 
 ## 📨 RabbitMQ Analytics Integration
 

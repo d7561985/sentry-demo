@@ -7,13 +7,14 @@ ARG APP_VERSION
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json ./
+# Copy package files first for better caching
+COPY package*.json ./
+
+# Install dependencies (this layer will be cached if package.json doesn't change)
+RUN npm ci --prefer-offline --no-audit
 
 # Copy scripts directory for environment generation
 COPY scripts ./scripts
-
-RUN npm install
 
 # Copy source code
 COPY . .

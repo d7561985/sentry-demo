@@ -3,13 +3,23 @@
 # Script to upload source maps from Docker container after build
 # This ensures we upload the exact same files that are deployed
 
-# Load environment variables
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Load environment variables from the script's directory
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    export $(cat "$SCRIPT_DIR/.env" | grep -v '^#' | xargs)
 fi
 
-# Get current version
-CURRENT_VERSION=$(cat .version)
+# Get current version from project root
+if [ -f "$SCRIPT_DIR/../../.version" ]; then
+    CURRENT_VERSION=$(cat "$SCRIPT_DIR/../../.version")
+elif [ -f ".version" ]; then
+    CURRENT_VERSION=$(cat .version)
+else
+    echo "❌ Error: .version file not found"
+    exit 1
+fi
 
 echo "📦 Uploading source maps from Docker container..."
 echo "   Version: $CURRENT_VERSION"
@@ -25,7 +35,17 @@ fi
 # Ensure we have auth token
 if [ -z "$SENTRY_AUTH_TOKEN" ]; then
     echo "❌ Error: SENTRY_AUTH_TOKEN not set"
-    echo "   Set it in .env file"
+    echo "   Set it in $SCRIPT_DIR/.env file"
+    exit 1
+fi
+
+# Ensure we have org and project
+if [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+    echo "❌ Error: SENTRY_ORG or SENTRY_PROJECT not set"
+    echo "   Set them in $SCRIPT_DIR/.env file"
+    echo "   Current values:"
+    echo "   - SENTRY_ORG: $SENTRY_ORG"
+    echo "   - SENTRY_PROJECT: $SENTRY_PROJECT"
     exit 1
 fi
 

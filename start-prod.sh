@@ -39,15 +39,28 @@ echo "📝 Version $CURRENT_VERSION will be used for Docker build..."
 # Export version for docker-compose
 export APP_VERSION=$CURRENT_VERSION
 
+# Enable Docker BuildKit for better caching
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
 # Start services in production mode
 echo "🔄 Starting Docker containers..."
 echo "📦 Building with version: $APP_VERSION"
+echo "🚀 Using Docker BuildKit for efficient caching"
 
 # Stop existing containers
 docker-compose down
 
-# Force rebuild all services with new version
-docker-compose build --no-cache
+# Build with caching (remove --no-cache for faster builds)
+echo "🔨 Building services (using cache when possible)..."
+docker-compose build
+
+# Force rebuild only if explicitly requested
+if [ "$1" = "--force-rebuild" ]; then
+    echo "⚠️  Force rebuild requested, ignoring cache..."
+    docker-compose build --no-cache
+fi
+
 docker-compose up -d
 
 echo ""
@@ -61,7 +74,7 @@ echo ""
 # Upload source maps from the running container if token is available
 if [ -n "$SENTRY_AUTH_TOKEN" ]; then
     echo "📤 Uploading source maps from deployed container..."
-    ./upload-sourcemaps-from-docker.sh
+    ./services/frontend/upload-sourcemaps-from-docker.sh
     echo ""
 fi
 
@@ -74,3 +87,7 @@ echo "  docker-compose logs -f frontend"
 echo ""
 echo "🛑 To stop:"
 echo "  docker-compose down"
+echo ""
+echo "💡 Tips:"
+echo "  - Builds use Docker cache for faster subsequent runs"
+echo "  - Force rebuild: ./start-prod.sh --force-rebuild"
