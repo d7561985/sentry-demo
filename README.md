@@ -68,6 +68,17 @@
    SENTRY_AUTH_TOKEN=your-auth-token
    ```
    
+   **Wager Service .env файл**:
+   ```bash
+   cd services/wager-service
+   cp .env.example .env
+   ```
+   
+   Откройте `services/wager-service/.env` и настройте:
+   - `APP_SECRET` - сгенерируйте новый ключ для production
+   - `SENTRY_DSN` - укажите DSN из проекта igaming-wager
+   - Остальные параметры можно оставить по умолчанию для локальной разработки
+   
    **Проверка конфигурации**:
    ```bash
    ./check-env.sh
@@ -540,6 +551,73 @@ const replayConfig = {
 };
 ```
 
+
+## 📋 Environment Variables Reference
+
+### Root .env файл
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SENTRY_FRONTEND_DSN` | DSN для Frontend проекта | `https://xxx@o123456.ingest.sentry.io/1234567` |
+| `SENTRY_GATEWAY_DSN` | DSN для API Gateway | `https://xxx@o123456.ingest.sentry.io/1234568` |
+| `SENTRY_USER_DSN` | DSN для User Service | `https://xxx@o123456.ingest.sentry.io/1234569` |
+| `SENTRY_GAME_DSN` | DSN для Game Engine | `https://xxx@o123456.ingest.sentry.io/1234570` |
+| `SENTRY_PAYMENT_DSN` | DSN для Payment Service | `https://xxx@o123456.ingest.sentry.io/1234571` |
+| `SENTRY_ANALYTICS_DSN` | DSN для Analytics Service | `https://xxx@o123456.ingest.sentry.io/1234572` |
+| `SENTRY_WAGER_DSN` | DSN для Wager Service | `https://xxx@o123456.ingest.sentry.io/1234573` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Процент трейсов для отправки | `1.0` (100% для dev, `0.1` для prod) |
+| `SENTRY_AUTH_TOKEN` | Токен для Sentry CLI операций | Получить на sentry.io |
+| `API_URL` | URL API Gateway | `http://localhost:8080` |
+| `APP_VERSION` | Версия приложения | `1.0.0` |
+
+### Frontend .env файл
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SENTRY_ORG` | Slug вашей организации в Sentry | `my-company` |
+| `SENTRY_PROJECT` | Slug проекта в Sentry | `igaming-frontend` |
+| `SENTRY_AUTH_TOKEN` | Токен для загрузки source maps | См. инструкцию выше |
+
+### Wager Service .env файл
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `APP_ENV` | Окружение Symfony | `dev`, `test`, `prod` |
+| `APP_SECRET` | Секретный ключ Symfony | Сгенерировать новый для prod |
+| `MONGODB_URL` | Строка подключения к MongoDB | `mongodb://admin:password@mongodb:27017/sentry_poc?authSource=admin` |
+| `MONGODB_DB` | Имя базы данных | `sentry_poc` |
+| `SENTRY_DSN` | DSN для Sentry | Взять из проекта igaming-wager |
+| `USER_SERVICE_URL` | URL User Service | `http://user-service:8081` |
+| `PAYMENT_SERVICE_URL` | URL Payment Service | `http://payment-service:8083` |
+| `APP_VERSION` | Версия сервиса | `1.0.0` |
+
+### Генерация секретов
+
+**Symfony APP_SECRET**:
+```bash
+# Вариант 1: PHP
+php -r "echo bin2hex(random_bytes(16));"
+
+# Вариант 2: OpenSSL
+openssl rand -hex 16
+
+# Вариант 3: Symfony console (если установлен)
+php bin/console secrets:generate-keys
+```
+
+### Проверка конфигурации
+
+После настройки всех .env файлов, проверьте корректность:
+```bash
+# Проверка основных переменных
+./check-env.sh
+
+# Проверка Sentry DSN (должны быть все 7 проектов)
+grep SENTRY_.*_DSN .env | wc -l  # Должно вернуть 7
+
+# Проверка что DSN не пустые
+grep SENTRY_.*_DSN .env | grep -v "="$  # Не должно быть вывода
+```
 
 # ToDo
 
