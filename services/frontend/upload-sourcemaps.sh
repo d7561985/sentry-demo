@@ -27,13 +27,13 @@ fi
 
 # Inject debug-ids into the built files
 echo "Injecting debug-ids..."
-npx @sentry/cli sourcemaps inject ./dist/frontend/browser
+npx @sentry/cli sourcemaps inject ./dist/frontend
 
 # Upload source maps with debug-ids
 echo "Uploading source maps..."
 echo "  Organization: $SENTRY_ORG"
 echo "  Project: $SENTRY_PROJECT"
-echo "  Directory: ./dist/frontend/browser"
+echo "  Directory: ./dist/frontend"
 
 # Add release information if version is provided
 if [ -n "$APP_VERSION" ]; then
@@ -52,13 +52,13 @@ if [ "$SENTRY_DEBUG" = "true" ]; then
       --project "$SENTRY_PROJECT" \
       $RELEASE_FLAG \
       --verbose \
-      ./dist/frontend/browser
+      ./dist/frontend
 else
     npx @sentry/cli sourcemaps upload \
       --org "$SENTRY_ORG" \
       --project "$SENTRY_PROJECT" \
       $RELEASE_FLAG \
-      ./dist/frontend/browser
+      ./dist/frontend
 fi
 
 echo "✅ Source maps with debug-ids uploaded successfully!"
@@ -70,6 +70,6 @@ fi
 # Optional: Delete source maps from dist to avoid exposing them
 if [ "$DELETE_SOURCEMAPS" = "true" ]; then
   echo "🗑️  Deleting source maps from dist..."
-  find ./dist/frontend/browser -name "*.map" -type f -delete
+  find ./dist/frontend -name "*.map" -type f -delete
   echo "✅ Source maps deleted from dist"
 fi

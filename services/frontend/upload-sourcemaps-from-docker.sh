@@ -55,7 +55,7 @@ echo "📁 Using temporary directory: $TEMP_DIR"
 
 # Copy files from container
 echo "📥 Copying files from container..."
-docker cp sentry-poc-frontend:/usr/share/nginx/html/browser $TEMP_DIR/
+docker cp sentry-poc-frontend:/usr/share/nginx/html/. $TEMP_DIR/
 
 # Upload source maps with version
 echo "📤 Uploading source maps to Sentry..."
@@ -65,7 +65,7 @@ npx @sentry/cli sourcemaps upload \
   --org "$SENTRY_ORG" \
   --project "$SENTRY_PROJECT" \
   --release "$CURRENT_VERSION" \
-  ./browser
+  .
 
 # Clean up
 cd - > /dev/null

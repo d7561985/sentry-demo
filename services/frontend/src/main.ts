@@ -24,6 +24,12 @@ Sentry.init({
   // Название окружения (production, staging, development и т.д.)
   environment: environment.production ? 'production' : 'development',
   
+  // === ЭКСПЕРИМЕНТАЛЬНЫЕ ФУНКЦИИ ===
+  // Включаем поддержку логов (Beta feature)
+  _experiments: {
+    enableLogs: true,
+  },
+  
   // === ИНТЕГРАЦИИ ===
   // Массив интеграций для расширения функциональности
   integrations: [
@@ -225,7 +231,7 @@ Sentry.init({
     
     // Захват консольных сообщений
     Sentry.captureConsoleIntegration({
-      levels: ['error', 'warn'], // Какие уровни захватывать
+      levels: ['log', 'info', 'warn', 'error', 'debug', 'trace'], // Захватываем все уровни для демо
     }),
     
     // Контекстные строки вокруг ошибок

@@ -10,21 +10,25 @@ import { BusinessMetricsComponent } from './business-metrics/business-metrics.co
 import { GameService } from './services/game.service';
 import { SentryErrorHandler } from './services/sentry-error.handler';
 
-@NgModule({ declarations: [
+@NgModule({
+    imports: [
+        BrowserModule,
         AppComponent,
         SlotMachineComponent,
-        BusinessMetricsComponent
-    ],
-    bootstrap: [AppComponent], imports: [BrowserModule,
+        BusinessMetricsComponent,
         RouterModule.forRoot([
             { path: '', component: SlotMachineComponent },
             { path: 'metrics', component: BusinessMetricsComponent }
-        ])], providers: [
+        ])
+    ],
+    providers: [
         GameService,
         {
             provide: ErrorHandler,
             useClass: SentryErrorHandler
         },
         provideHttpClient(withInterceptorsFromDi()),
-    ] })
+    ],
+    bootstrap: [AppComponent]
+})
 export class AppModule { }

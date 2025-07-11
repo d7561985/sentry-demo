@@ -1,4 +1,4 @@
-import { Component, OnInit, computed } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -117,6 +117,9 @@ import { environment } from '../../environments/environment';
               </button>
               <button class="debug-button" (click)="triggerComponentError()">
                 🔥 Trigger Component Error
+              </button>
+              <button class="debug-button" (click)="demoConsoleLogs()">
+                📝 Demo Console Logs
               </button>
             </div>
             <div class="debug-section">
@@ -499,8 +502,16 @@ export class SlotMachineComponent implements OnInit {
           span?.setAttribute('bet.amount', 10);
           span?.setAttribute('balance.before', this.balance());
           
-          const result = await this.gameService.spin(this.userId, 10).toPromise();
+          const result = await firstValueFrom(this.gameService.spin(this.userId, 10));
           if (result) {
+            // Log spin result
+            console.log('Spin completed', {
+              win: result.win,
+              payout: result.payout,
+              symbols: result.symbols,
+              newBalance: result.newBalance
+            });
+            
             // Add custom context
             span?.setAttribute('win', result.win);
             span?.setAttribute('payout', result.payout);
@@ -987,5 +998,146 @@ export class SlotMachineComponent implements OnInit {
         }
       }
     );
+  }
+
+  demoConsoleLogs(): void {
+    this.debugStatus = 'Sending demo logs to Sentry...';
+    
+    // Demo various console log levels - these will be captured as breadcrumbs
+    console.log('This is a regular log message', { 
+      userId: this.userId, 
+      balance: this.balance() 
+    });
+    
+    console.info('Info level: Game state information', {
+      totalSpins: this.totalSpins(),
+      winRate: this.winRate(),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.debug('Debug data for developers', {
+      component: 'SlotMachineComponent',
+      version: this.version,
+      apiUrl: this.apiUrl
+    });
+    
+    console.warn('Warning: Low balance detected!', {
+      currentBalance: this.balance(),
+      minimumRequired: 10,
+      userId: this.userId
+    });
+    
+    console.error('Error: Demo error for testing (not a real error)', {
+      errorCode: 'DEMO_ERROR',
+      context: 'This is just for demonstration purposes',
+      stack: new Error().stack
+    });
+    
+    console.trace('Trace level logging with call stack');
+    
+    // Using Sentry Log API (experimental feature)
+    const { logger } = Sentry;
+    
+    // Log with different severity levels using the new Log API
+    logger.info('This is an info log using Sentry Log API', {
+      userId: this.userId,
+      component: 'SlotMachineComponent',
+      action: 'demoLogs'
+    });
+    
+    logger.warn('Warning: Player approaching minimum balance threshold', {
+      currentBalance: this.balance(),
+      threshold: 10,
+      percentageRemaining: (this.balance() / 100) * 100
+    });
+    
+    logger.debug('Debug information for developers', {
+      version: this.version,
+      apiEndpoint: this.apiUrl,
+      browserInfo: navigator.userAgent,
+      timestamp: new Date().toISOString()
+    });
+    
+    logger.error('Error: Demo error using Log API (not a real error)', {
+      errorCode: 'DEMO_LOG_ERROR',
+      simulatedError: true,
+      context: 'Testing Sentry Log API functionality'
+    });
+    
+    logger.fatal('Fatal: Critical system failure simulation', {
+      component: 'GameEngine',
+      failureType: 'SIMULATED',
+      recoverable: true
+    });
+    
+    // Log with trace level
+    logger.trace('Trace level: Detailed execution flow', {
+      method: 'demoConsoleLogs',
+      callStack: new Error().stack,
+      executionTime: Date.now()
+    });
+    
+    // Adding breadcrumbs for additional context
+    Sentry.addBreadcrumb({
+      message: 'User triggered demo logs',
+      level: 'info',
+      category: 'demo',
+      data: {
+        userId: this.userId,
+        action: 'demoConsoleLogs'
+      }
+    });
+    
+    Sentry.addBreadcrumb({
+      message: 'Game state snapshot',
+      level: 'info',
+      category: 'game',
+      type: 'info',
+      data: {
+        balance: this.balance(),
+        totalSpins: this.totalSpins(),
+        winRate: this.winRate()
+      }
+    });
+    
+    // Set context for better log organization
+    Sentry.setContext('game_state', {
+      balance: this.balance(),
+      totalSpins: this.totalSpins(),
+      winRate: this.winRate(),
+      lastResult: this.lastResult()
+    });
+    
+    // Set tags for filtering
+    Sentry.setTags({
+      demo_type: 'logging_api',
+      user_id: this.userId,
+      uses_experimental_logs: true
+    });
+    
+    // Also demonstrate structured logging with extra data
+    logger.info('Structured game event with rich metadata', {
+      event: 'demo_logging_test',
+      player: {
+        id: this.userId,
+        type: 'demo_user',
+        sessionLength: Date.now()
+      },
+      gameState: {
+        balance: this.balance(),
+        totalSpins: this.totalSpins(),
+        winRate: this.winRate(),
+        recentResults: this.lastResult()
+      },
+      systemInfo: {
+        version: this.version,
+        environment: environment.production ? 'production' : 'development',
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    setTimeout(() => {
+      this.debugStatus = 'Logs sent! Check Sentry Logs (experimental) for structured log entries and console breadcrumbs.';
+    }, 1000);
   }
 }
